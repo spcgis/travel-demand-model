@@ -2,7 +2,7 @@
 This repository is reserved for mapping SPC's travel demand model with ArcGIS SDK. Source code was developed by SPC's intern and refactored from [`SPCGIS/BCTA_Microtransit/TripPurpose`](https://github.com/spcgis/BCTA_Microtransit), managed under Apache 2.0 license. 
 
 ## Contact Git Accounts
-Hannah Nguyen, SPC Travel Demand Modeler: hieuhannguyen
+Hannah Nguyen, SPC Travel Demand Modeler: hieuhannguyen<br>
 Yingjie Feng, source code developer: BOYKEFENG
 
 ## Background

@@ -167,23 +167,9 @@ require([
     let selectedRoute = "Both";
     let selectedScenario = "before";
 
-    // Create tooltip
-    const tooltip = document.createElement("div");
-    tooltip.id = "tripTooltip";
-    tooltip.style.cssText = `
-        display: none;
-        position: fixed;
-        background-color: white;
-        padding: 5px;
-        border: 1px solid black;
-        border-radius: 3px;
-        z-index: 1000;
-        pointer-events: none;
-        font-family: Arial, sans-serif;
-        font-size: 12px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    `;
-    view.ui.add(tooltip);
+    let originTripData = {};  
+    let displayRun = 0;       
+    let filterVersion = 0;    
 
     // Create filter container
     const filterDiv = document.createElement("div");
@@ -381,7 +367,7 @@ require([
 
     // Function to update side-panel display with base map information
     function baseSidePanel() {
-        let sidePanel = !document.getElementById("sidePanel");
+        let sidePanel = document.getElementById("sidePanel");
         if (!document.getElementById("sidePanel")) {
             sidePanel = createSidePanel();
         }
@@ -415,114 +401,72 @@ require([
     // Initialize base map
     updateBaseMap();
 
-    // Helper to aggregate results
-    function aggregate(results) {
+    // Helper to aggregate results into a target object
+    function aggregate(results, target) {
         results.features.forEach(f => {
             const destId = f.attributes["toZone"];
-            const trips = parseInt(f.attributes["vehTrip"]);
-            
-            aggregatedTrips[destId] = (aggregatedTrips[destId] || 0) + trips;                    
+            const trips = Number(f.attributes["vehTrip"]) || 0;
+            target[destId] = (target[destId] || 0) + trips;
         });
     }
 
-    // Function to handle origin click
-    function handleOriginClick(clickedZone) {
-
-        let aggregatedTrips = {};
-
-        // Generate query
+    // Query the needed table(s) for one origin and return { dest -> trips }
+    async function fetchOriginTrips(clickedZone) {
         const whereClause = `fromZone = '${clickedZone}'`;
         console.log("Query for TAZs:", whereClause);
 
-        if (selectedRoute === "Both") {
-            const fifthTable = getQueryTable(selectedScenario + "Fifth");
-            fifthTable.load().then(() => {
-                return fifthTable.queryFeatures({
-                    where: whereClause,
-                    outFields: ["*"],
-                    returnGeometry: false
-                });
-            }).then(function (results) {
+        const tableNames = selectedRoute === "Both"
+            ? [selectedScenario + "Fifth", selectedScenario + "Forbes"]
+            : [selectedScenario + selectedRoute];
 
-                if (!results.features.length) {
-                    console.log("No thru-Fifth destinations found for origin:", clickedZone);
-                    return;
-                }
-
-                console.log("Fifth results:", {
-                    originId: clickedZone,
-                    featuresFound: results.features.length
-                });
-            
-                aggregate(results);
+        const resultsList = await Promise.all(tableNames.map(async name => {
+            const table = getQueryTable(name);
+            await table.load();
+            const results = await table.queryFeatures({
+                where: whereClause,
+                outFields: ["toZone", "vehTrip"],
+                returnGeometry: false
             });
-
-            const forbesTable = getQueryTable(selectedScenario + "Forbes");
-            forbesTable.load().then(() => {
-                return forbesTable.queryFeatures({
-                    where: whereClause,
-                    outFields: ["*"],
-                    returnGeometry: false
-                });
-            }).then(function (results) {
-                
-                if (!results.features.length) {
-                    console.log("No thru-Forbes destinations found for origin:", clickedZone);
-                    return;
-                }
-
-                console.log("Forbes results:", {
-                    originId: clickedZone,
-                    featuresFound: results.features.length
-                });
-                
-                aggregate(results);
+            console.log(`${name} results:`, {
+                originId: clickedZone,
+                featuresFound: results.features.length
             });
+            return results;
+        }));
 
-        } else {
-            const queryTable = getQueryTable(selectedScenario+selectedRoute);
-            queryTable.load().then(() => {
-                return queryTable.queryFeatures({
-                    where: whereClause,
-                    outFields: ["*"],
-                    returnGeometry: false
-                });
-            }).then(function(results) {
-                
-                if (!results.features.length) {
-                    console.log("No destinations found for origin:", clickedZone);
-                    return;
-                }
+        const aggregated = {};
+        resultsList.forEach(r => aggregate(r, aggregated));
+        return aggregated;
+    }
 
-                console.log("Query results:", {
-                    originId: clickedZone,
-                    featuresFound: results.features.length
-                });
-                
-                aggregate(results);
-            });
-        }
-        
-        if (aggregatedTrips.length === 0) {
-            return;
-        } else {
-            // Store aggregated results
-            tripData[clickedZone] = {};
-            Object.entries(aggregatedTrips).forEach(([destId, trips]) => {
-                tripData[clickedZone][destId] = trips;
-            });
-            
+    // Function to handle origin click
+    async function handleOriginClick(clickedZone) {
+        const version = filterVersion;
+        try {
+            const aggregated = await fetchOriginTrips(clickedZone);
+
+            // Discard if the scenario/route changed or the origin was deselected while loading
+            if (version !== filterVersion || !selectedOrigins.has(clickedZone)) return;
+
+            // An empty {} is fine: the origin still gets its red border
+            originTripData[clickedZone] = aggregated;
+
             console.log("Results summary:", {
                 originId: clickedZone,
-                totalDestinations: Object.keys(aggregatedTrips).length,
-                totalTrips: Object.values(aggregatedTrips).reduce((sum, trips) => sum + trips, 0)
+                totalDestinations: Object.keys(aggregated).length,
+                totalTrips: Object.values(aggregated).reduce((sum, t) => sum + t, 0)
             });
 
             updateDisplay();
-        }}
+        } catch (error) {
+            console.error("Error handling origin click:", error);
+        }
+    }
 
-    // Function to dynamically update display after an origin click
-    function updateDisplay() {
+    // Linking logic: re-run every selected origin after scenario/route changes
+    async function updateLayerFilter() {
+        const version = ++filterVersion;
+        originTripData = {};
         view.graphics.removeAll();
 
         if (selectedOrigins.size === 0) {
@@ -530,83 +474,104 @@ require([
             return;
         }
 
-        const originIds = Array.from(selectedOrigins).map(id => `'${id}'`).join(",");
-        const originQuery = displayLayer.createQuery();
-        originQuery.where = `CUBE_ZONE IN (${originIds})`;
-        originQuery.outFields = ["CUBE_ZONE"];
+        try {
+            const entries = await Promise.all(
+                Array.from(selectedOrigins).map(async zone => [zone, await fetchOriginTrips(zone)])
+            );
+            if (version !== filterVersion) return;   // superseded by a newer change
 
-        // Generate classbreaks dynamically        
-        const sortedCounts = Object.values(tripData).flatMap(destObj => Object.values(destObj)).sort((a, b) => a - b);
-        if (sortedCounts[sortedCounts.length - 1] > 200) {
-            displayLayer.renderer = generateRenderer(generateClassBreaks(sortedCounts));
-        } else {
-           displayLayer.renderer = generateRenderer([5, 10, 25, 50]);
+            entries.forEach(([zone, dests]) => { originTripData[zone] = dests; });
+            updateDisplay();
+        } catch (error) {
+            console.error("Error refreshing origins:", error);
         }
-
-        displayLayer.queryFeatures(originQuery).then(function(originResults) {
-            // Calculate combined trips for all destinations
-            let combinedTrips = {};
-            Object.values(tripData).forEach(originData => {
-                Object.entries(originData).forEach(([destId, trips]) => {
-                    combinedTrips[destId] = (combinedTrips[destId] || 0) + trips;
-                });
-            });
-
-            // Update side panel content
-            updateSidePanel(originResults.features, combinedTrips);
-
-            // Query and highlight destinations (no borders)
-            const destQuery = displayLayer.createQuery();
-            const destIds = Object.keys(combinedTrips);
-            if (destIds.length === 0) return;
-
-            destQuery.where = `CUBE_ZONE IN (${destIds.join(",")})`;
-            destQuery.outFields = ["CUBE_ZONE"];
-
-            displayLayer.queryFeatures(destQuery).then(function(destResults) {
-                // First, add all destinations with color fills but no borders
-                destResults.features.forEach(function(f) {
-                    const destId = f.attributes.CUBE_ZONE;
-                    const tripCount = combinedTrips[destId] || 0;
-                    const color = getColorFromRenderer(displayLayer.renderer, tripCount);
-                    
-                    // Only add fill color, no border
-                    view.graphics.add({
-                        geometry: f.geometry,
-                        symbol: {
-                            type: "simple-fill",
-                            color: color,
-                            outline: { color: [0, 128, 0], width: 1 } // Green border
-                        }
-                    });
-                });
-                
-                // Then add prominent borders ONLY to selected origins (on top of fills)
-                originResults.features.forEach(function(f) {
-                    view.graphics.add({
-                        geometry: f.geometry,
-                        symbol: {
-                            type: "simple-fill",
-                            color: [0, 0, 0, 0], // Transparent fill
-                            outline: { 
-                                color: [255, 0, 0], // Bright red border
-                                width: 3          // Thick border
-                            }
-                        }
-                    });
-                });
-            });
-        });
     }
 
-    // Click handler
-    view.on("click", function(event) {
-        view.hitTest(event).then(function(response) {
-            const result = response.results.find(r =>
-                r.graphic?.layer?.id === "displayLayer"
-            );
+    // Function to dynamically update display after an origin click
+    async function updateDisplay() {
+        const run = ++displayRun;
+        view.graphics.removeAll();
+
+        if (selectedOrigins.size === 0) {
+            updateBaseMap();
+            return;
+        }
+
+        // Combine first so the class breaks match the values actually colored
+        const combinedTrips = {};
+        Object.values(originTripData).forEach(dests => {
+            Object.entries(dests).forEach(([destId, trips]) => {
+                combinedTrips[destId] = (combinedTrips[destId] || 0) + trips;
+            });
+        });
+
+        const sortedCounts = Object.values(combinedTrips).sort((a, b) => a - b);
+        displayLayer.renderer = generateRenderer(
+            sortedCounts.length && sortedCounts[sortedCounts.length - 1] > 200
+                ? generateClassBreaks(sortedCounts)
+                : [5, 10, 25, 50]
+        );
+
+        try {
+            const originQuery = displayLayer.createQuery();
+            originQuery.where = `CUBE_ZONE IN (${Array.from(selectedOrigins).map(id => `'${id}'`).join(",")})`;
+            originQuery.outFields = ["CUBE_ZONE"];
+            originQuery.returnGeometry = true;
+
+            // Drop the quotes on both IN lists if CUBE_ZONE is a numeric field
+            const destIds = Object.keys(combinedTrips);
+            let destQuery = null;
+            if (destIds.length) {
+                destQuery = displayLayer.createQuery();
+                destQuery.where = `CUBE_ZONE IN (${destIds.map(id => `'${id}'`).join(",")})`;
+                destQuery.outFields = ["CUBE_ZONE"];
+                destQuery.returnGeometry = true;
+            }
+
+            const [originResults, destResults] = await Promise.all([
+                displayLayer.queryFeatures(originQuery),
+                destQuery ? displayLayer.queryFeatures(destQuery) : Promise.resolve({ features: [] })
+            ]);
+            if (run !== displayRun) return;   // a newer update superseded this one
+
+            updateSidePanel(originResults.features);
+
+            // Destinations: color fills
+            destResults.features.forEach(f => {
+                const tripCount = combinedTrips[f.attributes.CUBE_ZONE] || 0;
+                const color = getColorFromRenderer(displayLayer.renderer, tripCount);
+                view.graphics.add({
+                    geometry: f.geometry,
+                    symbol: {
+                        type: "simple-fill",
+                        color: color,
+                        outline: { color: [0, 128, 0], width: 1 }
+                    }
+                });
+            });
+
+            // Selected origins: red border on top (drawn even with zero destinations)
+            originResults.features.forEach(f => {
+                view.graphics.add({
+                    geometry: f.geometry,
+                    symbol: {
+                        type: "simple-fill",
+                        color: [0, 0, 0, 0],
+                        outline: { color: [255, 0, 0], width: 3 }
+                    }
+                });
+            });
+        } catch (error) {
+            console.error("Error updating display:", error);
+        }
+    }
+
+    view.on("click", function (event) {
+        view.hitTest(event, { include: [displayLayer] }).then(function (response) {
+            const result = response.results[0];
+
+            // Click on empty space
             if (!result) {
-                updateBaseMap()
                 return;
             }
 
@@ -616,30 +581,26 @@ require([
                 return;
             }
 
-            // Click tracking - toggle selection
             if (selectedOrigins.has(clickedZone)) {
                 selectedOrigins.delete(clickedZone);
-                delete tripData[clickedZone];
+                delete originTripData[clickedZone];
                 updateDisplay();
                 return;
             }
 
-            // If not selected, add it
             selectedOrigins.add(clickedZone);
             handleOriginClick(clickedZone);
-        
         }).catch(error => {
             console.error("Error in hitTest:", error);
         });
     });
-
-    // Function to update side panel content
-    function updateSidePanel(originFeatures, combinedTrips) {
+    
+    function updateSidePanel(originFeatures) {
         const sidePanel = document.getElementById("sidePanel") || createSidePanel();
 
         let content = `
             <div style="text-align: right;">
-                <button onclick="this.parentElement.parentElement.style.display='none'" 
+                <button onclick="this.parentElement.parentElement.style.display='none'"
                         style="border: none; background: none; cursor: pointer;">✕</button>
             </div>
             <h3 style="margin-block-start:0px; margin-block-end:0px;">Selected TAZ</h3>
@@ -648,12 +609,13 @@ require([
 
         originFeatures.forEach(feature => {
             const zoneID = feature.attributes.CUBE_ZONE;
-            const totalTrips = Object.values(tripData[zoneID] || {}).reduce((sum, trips) => sum + trips, 0);
-            
+            const totalTrips = Object.values(originTripData[zoneID] || {})
+                .reduce((sum, trips) => sum + trips, 0);
+
             content += `
                 <div style="margin-bottom: 2px;">
-                    <p style="margin-block-end:0px;"><strong>Block Group:</strong> ${zoneID}</p>
-                    <p style="margin-block-start:0px;"><strong>Total Outbound Trips:</strong> ${totalTrips}</p>
+                    <p style="margin-block-end:0px;"><strong>TAZ:</strong> ${zoneID}</p>
+                    <p style="margin-block-start:0px;"><strong>Total Outbound Trips:</strong> ${Math.round(totalTrips)}</p>
                     <hr>
                 </div>
             `;
@@ -663,34 +625,18 @@ require([
         sidePanel.style.display = "block";
     }
 
-    // Linking logic
-    function updateLayerFilter() {
-        tripData = {};
-        view.graphics.removeAll();
-        // Re-run click logic for each already-selected origin
-        if (selectedOrigins.size === 0) {
-            updateBaseMap();
-        } else {
-            selectedOrigins.forEach(zoneID => handleOriginClick(zoneID));
-        }
-        
-    }
-
     // Event handlers for filters
-    document.getElementById("routeSelect").addEventListener("change", function(e) {
+    document.getElementById("routeSelect").addEventListener("change", function (e) {
         selectedRoute = e.target.value;
-        // Log the selection
         console.log("Selected route:", selectedRoute);
         updateLayerFilter();
     });
 
-    document.getElementById("scenarioSelect").addEventListener("change", function(e) {
+    document.getElementById("scenarioSelect").addEventListener("change", function (e) {
         selectedScenario = e.target.value;
-        // Log the selection
-        console.log("Selected scenario:", selectedScenario);       
+        console.log("Selected scenario:", selectedScenario);
         updateLayerFilter();
     });
-
      // Update the legend configuration
     const legend = new Legend({
         view: view,

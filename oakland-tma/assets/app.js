@@ -1,3 +1,147 @@
+// Helpers
+
+// Generate class breaks
+function generateRenderer(breaks) {
+    return {
+        type: "class-breaks",
+        defaultSymbol: {
+            type: "simple-fill",
+            color: [180, 230, 180, 0.6], // green for no trips
+            outline: { color: [0, 128, 0], width: 1 }
+        },
+        defaultLabel: "0 trip",
+        classBreakInfos: [
+        {
+            minValue: 1,
+            maxValue: breaks[0],
+            symbol: {
+                type: "simple-fill",
+                color: [255, 241, 169, 0.7],
+                outline: { color: [0, 128, 0], width: 1 }
+            },
+            label: `1-${breaks[0]} trips`
+        },
+        {
+            minValue: breaks[0]+1,
+            maxValue: breaks[1],
+            symbol: {
+                type: "simple-fill",
+                color: [254, 204, 92, 0.7],
+                outline: { color: [0, 128, 0], width: 1 }
+            },
+            label: `${breaks[0]+1}-${breaks[1]} trips`
+        },
+        {
+            minValue: breaks[1]+1,
+            maxValue: breaks[2],
+            symbol: {
+                type: "simple-fill",
+                color: [253, 141, 60, 0.7],
+                outline: { color: [0, 128, 0], width: 1 }
+            },
+            label: `${breaks[1]+1}-${breaks[2]} trips`
+        },
+        {
+            minValue: breaks[2]+1,
+            maxValue: breaks[3],
+            symbol: {
+                type: "simple-fill",
+                color: [240, 59, 32, 0.7],
+                outline: { color: [0, 128, 0], width: 1 }
+            },
+            label: `${breaks[2]+1}-${breaks[3]} trips`
+        },
+        {
+            minValue: breaks[3]+1,
+            maxValue: 99999999999,
+            symbol: {
+                type: "simple-fill",
+                color: [189, 0, 38, 0.7],
+                outline: { color: [0, 128, 0], width: 1 }
+            },
+            label: `>${breaks[3]} trips`
+        }
+    ]};
+}
+
+// Dynamically generate classbreaks
+function generateClassBreaks(data, numClasses = 5) {
+    if (!data || data.length === 0) return [5, 10, 25, 50];
+    const n = data.length;
+
+    // Initialize matrices
+    const mat1 = Array.from({ length: n + 1 }, () => Array(numClasses + 1).fill(0));
+    const mat2 = Array.from({ length: n + 1 }, () => Array(numClasses + 1).fill(0));
+
+    for (let i = 1; i <= numClasses; i++) {
+        mat1[0][i] = 1;
+        mat2[0][i] = 0;
+        for (let j = 1; j <= n; j++) {
+            mat2[j][i] = Infinity;
+        }
+    }
+
+    let v = 0;
+    for (let l = 2; l <= n; l++) {
+        let s1 = 0, s2 = 0, w = 0;
+        for (let m = 1; m <= l; m++) {
+            const i3 = l - m + 1;
+            const val = data[i3 - 1];
+
+            s2 += val * val;
+            s1 += val;
+            w++;
+
+            v = s2 - (s1 * s1) / w;
+            const i4 = i3 - 1;
+            if (i4 !== 0) {
+                for (let j = 2; j <= numClasses; j++) {
+                    if (mat2[l][j] >= (v + mat2[i4][j - 1])) {
+                        mat1[l][j] = i3;
+                        mat2[l][j] = v + mat2[i4][j - 1];
+                    }
+                }
+            }
+        }
+        mat1[l][1] = 1;
+        mat2[l][1] = v;
+    }
+
+    // Backtrack to find class breaks
+    const breaks = Array(numClasses + 1).fill(0);
+    breaks[numClasses] = data[data.length - 1];
+    let k = n;
+    for (let j = numClasses; j >= 2; j--) {
+        const id = mat1[k][j] - 2;
+        breaks[j - 1] = data[id];
+        k = mat1[k][j] - 1;
+    }
+    breaks[0] = data[0];
+    roundedBreaks = breaks.map(b => Math.round(b / 5) * 5);
+
+    return roundedBreaks.slice(1);
+}
+
+// Get the appropriate 
+function getColorFromRenderer(renderer, tripCount) {
+    const breakInfo = renderer.classBreakInfos.find(info => 
+        tripCount >= info.minValue && tripCount <= info.maxValue
+    );
+    return breakInfo ? breakInfo.symbol.color : [0, 0, 0, 0];
+}
+
+// URL handling
+const baseURL = "https://services3.arcgis.com/MV5wh5WkCMqlwISp/ArcGIS/rest/services/FifthForbes_ThruTrips/FeatureServer/";
+const tableURL = {
+        "layer": "0",
+        "afterFifth": "1",
+        "afterForbes": "2",
+        "beforeFifth": "3",
+        "beforeForbes": "4",
+        "summaryTable": "5"
+    };
+
+// ArcOnline operations
 require([
     "esri/Map",
     "esri/views/MapView",
@@ -13,17 +157,15 @@ require([
     const view = new MapView({
         container: "viewDiv",
         map: map,
-        center: [-80.3192, 40.6495], // Beaver County coordinates
+        center: [-79.977711, 40.438776], // Central Oakland
         zoom: 10
     });
 
     // Initialize state variables
     let selectedOrigins = new Set();
     let tripData = {};
-    let selectedDay = "Proposed";
-    let selectedTime = "Proposed";
-    let selectedPurpose = "Average_Daily_O_D_Traffic__StL_Volume_";
-    let tripPurposeLabel = "All Purposes";
+    let selectedRoute = "Both";
+    let selectedScenario = "before";
 
     // Create tooltip
     const tooltip = document.createElement("div");
@@ -59,428 +201,311 @@ require([
     // Update filterDiv innerHTML to include the mode selection dropdown
     filterDiv.innerHTML = `
     <div style="margin-bottom: 10px;">
-        <label for="purposeSelect">Trip Purpose:</label></br>
-        <select id="purposeSelect" style="border: 1px solid #ccc">
-            <option value="Average_Daily_O_D_Traffic__StL_Volume_">All Purposes</option>
-            <option value="HometoWork">Home to Work</option>
-            <option value="HometoOther">Home to Other</option>
-            <option value="NonHomeBasedTrips">Non Home Based</option>
+        <label for="routeSelect">Through Route:</label></br>
+        <select id="routeSelect" style="border: 1px solid #ccc">
+            <option value="Both">Both Fifth & Forbes Avenues</option>
+            <option value="Fifth">Fifth Avenue</option>
+            <option value="Forbes">Forbes Avenue</option>
         </select>
     </div>
     <div style="margin-bottom: 10px;">
-        <label for="daySelect">Day of Week:</label>
-        <select id="daySelect" style="border: 1px solid #ccc">
-            <option value="Proposed">Proposed Microtransit Service Days (M-F)</option>
-            <option value="0: All Days (M-Su)">All (Mon-Su)</option>
-            <option value="1: Monday (M-M)">Monday</option>
-            <option value="2: Tuesday (Tu-Tu)">Tuesday</option>
-            <option value="3: Wednesday (W-W)">Wednesday</option>
-            <option value="4: Thursday (Th-Th)">Thursday</option>
-            <option value="5: Friday (F-F)">Friday</option>
-            <option value="6: Saturday (Sa-Sa)">Saturday</option>
-            <option value="7: Sunday (Su-Su)">Sunday</option>
+        <label for="scenarioSelect">Scenario:</label>
+        <select id="scenarioSelect" style="border: 1px solid #ccc">
+            <option value="before">Before Contraflow Lane Closure</option>
+            <option value="after">After Contraflow Lane Closure</option>
         </select>
     </div>
-    <div>
-        <label for="timeSelect">Time Period:</label>
-        <select id="timeSelect" style="border: 1px solid #ccc">
-            <option value="Proposed">Proposed Microtransit Service Times (6am–8pm)</option>
-            <option value="00: All Day (12am-12am)">All (12am-12pm)</option>
-            <option value="01: 6am (6am-7am)">6am-7am</option>
-            <option value="02: 7am (7am-8am)">7am-8am</option>
-            <option value="03: 8am (8am-9am)">8am-9am</option>
-            <option value="04: 9am (9am-10am)">9am-10am</option>
-            <option value="05: 10am (10am-11am)">10am-11am</option>
-            <option value="06: 11am (11am-12noon)">11am-12pm</option>
-            <option value="07: 12pm (12noon-1pm)">12pm-1pm</option>
-            <option value="08: 1pm (1pm-2pm)">1pm-2pm</option>
-            <option value="09: 2pm (2pm-3pm)">2pm-3pm</option>
-            <option value="10: 3pm (3pm-4pm)">3pm-4pm</option>
-            <option value="11: 4pm (4pm-5pm)">4pm-5pm</option>
-            <option value="12: 5pm (5pm-6pm)">5pm-6pm</option>
-            <option value="13: 6pm (6pm-7pm)">6pm-7pm</option>
-            <option value="14: 7pm (7pm-8pm)">7pm-8pm</option>
-        </select>
+    <div style="margin-bottom: 10px">
         <p style="font-size:smaller;">*Estimates are daily averages.</p>
     </div>
     `;
     view.ui.add(filterDiv, "top-right");
 
-    // Default green renderer for block groups
-    const greenRenderer = {
+    // Function to cache query tables
+    const queryTables = {};
+    function getQueryTable(key) {
+        if (!queryTables[key]) {
+            queryTables[key] = new FeatureLayer({
+                url: baseURL + tableURL[key],
+                outFields: ["*"],
+                visible: false
+            });
+        }
+        return queryTables[key];
+    }
+
+    // Black Outline
+    const outlineRenderer = {
         type: "simple",
         symbol: {
             type: "simple-fill",
-            color: [180, 230, 180, 0.6], // light green
-            outline: { color: [0, 128, 0], width: 1 }
+            color: [255, 255, 255, 0], // Transparent white 
+            outline: { color: [0, 128, 0], width: 1 } // Green outline
         }
     };
 
-    const initialRenderer = {
-        type: "simple",
-        symbol: {
-            type: "simple-fill",
-            color: [180, 230, 180, 0.6], // light green
-            outline: { color: [0, 128, 0], width: 1 }
-        },
-        label: "NA - Origin Not Selected"
-    };
-
-    // Layer for block group outlines (green)
-    const blockGroupOutlineLayer = new FeatureLayer({
-        url: "https://services3.arcgis.com/MV5wh5WkCMqlwISp/ArcGIS/rest/services/BCTA_Trip_Purpose/FeatureServer/0",
-        id: "BlockGroupOutline",
+    // Layer for TAZ outlines (green)
+    const zoneBoundary = new FeatureLayer({
+        url: baseURL + tableURL.layer,
+        id: "zoneOutline",
         outFields: ["*"],
         visible: true,
-        opacity: 0.7,
-        renderer: greenRenderer
+        renderer: outlineRenderer
     });
-    
-    // Add both layers to the map (order matters: outlines first, trips second)
-    map.add(blockGroupOutlineLayer);
+    map.add(zoneBoundary);
 
-    // Create feature layers
-    const beaverCountyBG = new FeatureLayer({
-        url: "https://services3.arcgis.com/MV5wh5WkCMqlwISp/ArcGIS/rest/services/BCTA_Trip_Purpose/FeatureServer/0",
-        id: "BeaverCounty_BG",
+    // Layer for display
+    const displayLayer = new FeatureLayer({
+        url: baseURL + tableURL.layer,
+        id: "mapLayer",
         outFields: ["*"],
-        visible: true,
-        opacity: 0.7,
-        renderer: initialRenderer
+        visible: true
     });
+    map.add(displayLayer);
 
-    beaverCountyBG.when(() => {
-        console.log("BeaverCounty layer fields:", 
-            beaverCountyBG.fields.map(f => ({name: f.name, type: f.type}))
-        );
-    });
-
-    map.add(beaverCountyBG);
-
-    // Update the legend configuration
-    const legend = new Legend({
-        view: view,
-        style: "classic",
-        layerInfos: [
-            {
-                layer: beaverCountyBG,
-                title: "Inbound Trips"
-            },
-            {
-                layer: blockGroupOutlineLayer,
-                title: "Block Groups"
-            }
-        ]
-    });
-
-    const legendExpand = new Expand({
-        view: view,
-        content: legend,
-        expanded: true,
-        expandIconClass: "esri-icon-legend",
-        mode: "floating"
-    });
-
-    view.ui.add(legendExpand, "bottom-left");
-
-    // Event handlers for filters
-    document.getElementById("daySelect").addEventListener("change", function(e) {
-        selectedDay = e.target.value;
-        // Log the selection
-        console.log("Selected time period:", selectedDay === "ALL" ? "All Times" : selectedDay);
-        updateLayerFilter();
-    });
-
-    document.getElementById("timeSelect").addEventListener("change", function(e) {
-        selectedTime = e.target.value;
-
-        // Log the selection
-        console.log("Selected time period:", selectedTime === "ALL" ? "All Times" : selectedTime);       
-        updateLayerFilter();
-    });
-
-    // Add event handler for mode selection
-    document.getElementById("purposeSelect").addEventListener("change", function(e) {
-        selectedPurpose = e.target.value;
-        tripPurposeLabel = this.options[this.selectedIndex].text;
-        console.log("Selected purpose:", tripPurposeLabel);
-        updateLayerFilter();
-    });
-
-    function generateRenderer(breaks) {
-        return {
-            type: "class-breaks",
-            defaultSymbol: {
-                type: "simple-fill",
-                color: [180, 230, 180, 0.6], // green for no trips
-                outline: { color: [0, 128, 0], width: 1 }
-            },
-            defaultLabel: "0 trip",
-            classBreakInfos: [
-            {
-                minValue: 1,
-                maxValue: breaks[0],
-                symbol: {
-                    type: "simple-fill",
-                    color: [255, 241, 169, 0.7],
-                    outline: { color: [0, 128, 0], width: 1 }
-                },
-                label: `1-${breaks[0]} trips`
-            },
-            {
-                minValue: breaks[0]+1,
-                maxValue: breaks[1],
-                symbol: {
-                    type: "simple-fill",
-                    color: [254, 204, 92, 0.7],
-                    outline: { color: [0, 128, 0], width: 1 }
-                },
-                label: `${breaks[0]+1}-${breaks[1]} trips`
-            },
-            {
-                minValue: breaks[1]+1,
-                maxValue: breaks[2],
-                symbol: {
-                    type: "simple-fill",
-                    color: [253, 141, 60, 0.7],
-                    outline: { color: [0, 128, 0], width: 1 }
-                },
-                label: `${breaks[1]+1}-${breaks[2]} trips`
-            },
-            {
-                minValue: breaks[2]+1,
-                maxValue: breaks[3],
-                symbol: {
-                    type: "simple-fill",
-                    color: [240, 59, 32, 0.7],
-                    outline: { color: [0, 128, 0], width: 1 }
-                },
-                label: `${breaks[2]+1}-${breaks[3]} trips`
-            },
-            {
-                minValue: breaks[3]+1,
-                maxValue: 99999999999,
-                symbol: {
-                    type: "simple-fill",
-                    color: [189, 0, 38, 0.7],
-                    outline: { color: [0, 128, 0], width: 1 }
-                },
-                label: `>${breaks[3]} trips`
-            }
-        ]};
+    // Function to create side panel if it doesn't exist
+    function createSidePanel() {
+        const sidePanel = document.createElement("div");
+        sidePanel.id = "sidePanel";
+        sidePanel.style.cssText = `
+            position: absolute;
+            left: 39px;
+            background: white;
+            padding: 15px;
+            border-radius: 3px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            width: 270px;
+            z-index: 1000;
+            display: none;
+            max-height: 300%;
+            overflow-y: auto;
+        `;
+        view.ui.add(sidePanel, "top-left");
+        return sidePanel;
     }
 
-    // Dynamically generate classbreaks
-    function generateClassBreaks(data, numClasses = 5) {
-        if (!data || data.length === 0) return [5, 10, 25, 50];
-        const n = data.length;
-
-        // Initialize matrices
-        const mat1 = Array.from({ length: n + 1 }, () => Array(numClasses + 1).fill(0));
-        const mat2 = Array.from({ length: n + 1 }, () => Array(numClasses + 1).fill(0));
-
-        for (let i = 1; i <= numClasses; i++) {
-            mat1[0][i] = 1;
-            mat2[0][i] = 0;
-            for (let j = 1; j <= n; j++) {
-                mat2[j][i] = Infinity;
-            }
-        }
-
-        let v = 0;
-        for (let l = 2; l <= n; l++) {
-            let s1 = 0, s2 = 0, w = 0;
-            for (let m = 1; m <= l; m++) {
-                const i3 = l - m + 1;
-                const val = data[i3 - 1];
-
-                s2 += val * val;
-                s1 += val;
-                w++;
-
-                v = s2 - (s1 * s1) / w;
-                const i4 = i3 - 1;
-                if (i4 !== 0) {
-                    for (let j = 2; j <= numClasses; j++) {
-                        if (mat2[l][j] >= (v + mat2[i4][j - 1])) {
-                            mat1[l][j] = i3;
-                            mat2[l][j] = v + mat2[i4][j - 1];
-                        }
-                    }
-                }
-            }
-            mat1[l][1] = 1;
-            mat2[l][1] = v;
-        }
-
-        // Backtrack to find class breaks
-        const breaks = Array(numClasses + 1).fill(0);
-        breaks[numClasses] = data[data.length - 1];
-        let k = n;
-        for (let j = numClasses; j >= 2; j--) {
-            const id = mat1[k][j] - 2;
-            breaks[j - 1] = data[id];
-            k = mat1[k][j] - 1;
-        }
-        breaks[0] = data[0];
-        roundedBreaks = breaks.map(b => Math.round(b / 5) * 5);
-
-        return roundedBreaks.slice(1);
-    }
-    
-    // Get the appropriate 
-    function getColorFromRenderer(renderer, tripCount) {
-        const breakInfo = renderer.classBreakInfos.find(info => 
-            tripCount >= info.minValue && tripCount <= info.maxValue
-        );
-        return breakInfo ? breakInfo.symbol.color : [0, 0, 0, 0];
-    }
-
-    // Update the updateLayerFilter function to also update the legend title
-    function updateLayerFilter() {
-        tripData = {};
+    // Function to update base display
+    function updateBaseMap() {
+        // Refresh
         view.graphics.removeAll();
-        // Re-run click logic for each already-selected origin
-        selectedOrigins.forEach(bgId => handleOriginClick(bgId));
+        tripData = {};
+        let targetCols;
+
+        // Get target column & query the table
+        if (selectedRoute === "Both") {
+            targetCols = [selectedScenario + "Forbes", selectedScenario + "Fifth"];
+        } else {
+            targetCols = selectedScenario + selectedRoute;
+        }
+        
+        // Create feature layer for query
+        const queryTable = getQueryTable("summaryTable");
+        queryTable.load().then(() => {
+        console.log("Selected:", targetCols);
+        return queryTable.queryFeatures({
+            where: "1=1",
+            outFields: ["*"],
+            returnGeometry: false
+            });
+        }).then(results => {
+            results.features.forEach(feature => {
+                const attrs = feature.attributes;
+                const zone = attrs["Zone"];
+
+                if (selectedRoute === "Both") {
+                    const total = targetCols.reduce((sum, fieldName) => {
+                        return sum + (Number(attrs[fieldName]) || 0);
+                    }, 0);
+                    tripData[zone] = total;
+                } else {
+                    tripData[zone] = Number(attrs[targetCols]) || 0;
+                }
+            });
+        });
+
+        const sortedCounts = Object.values(tripData).flatMap(obj => Object.values(obj)).sort((a, b) => a - b);
+        if (sortedCounts[sortedCounts.length - 1] > 200) {
+            displayLayer.renderer = generateRenderer(generateClassBreaks(sortedCounts));
+        } else {
+           displayLayer.renderer = generateRenderer([5, 10, 25, 50]);
+        }
+
+        displayLayer.features.forEach(feature => {
+            const zone = feature.attributes["CUBE_ZONE"];
+            const tripCount = tripData[zone] || 0;
+            const color = getColorFromRenderer(displayLayer.renderer, tripCount);
+
+            view.graphics.add({
+                        geometry: f.geometry,
+                        symbol: {
+                            type: "simple-fill",
+                            color: color,
+                            outline: { color: [0, 128, 0], width: 1 } 
+                        }
+                    });
+        });
+        baseSidePanel();
     }
 
-    // Click handler
-    view.on("click", function(event) {
-        view.hitTest(event).then(function(response) {
-            const result = response.results.find(r =>
-                r.graphic?.layer?.id === "BeaverCounty_BG"
-            );
-            if (!result) {
-                if (document.getElementById("sidePanel")) {
-                    document.getElementById("sidePanel").style.display = "none";
-                }
-                return;
-            }
+    // Function to update side-panel display with base map information
+    function baseSidePanel() {
+        const sidePanel = document.getElementById("sidePanel");
 
-            const clickedBGId = result.graphic.attributes.GEOID;
-            if (!clickedBGId) {
-                console.error("No GEOID found in clicked feature");
-                return;
-            }
+        const totalTrips = Object.entries(tripData)
+            .filter(([column]) => column !== "Zone")
+            .reduce((total, [, values]) => {
+                return total + values.reduce((sum, value) => sum + Number(value), 0);
+            }, 0);
 
-            // Click tracking - toggle selection
-            if (selectedOrigins.has(clickedBGId)) {
-                selectedOrigins.delete(clickedBGId);
-                delete tripData[clickedBGId];
-                updateDisplay();
-                return;
-            }
+        const content = `
+            <div style="text-align: right;">
+                <button onclick="this.parentElement.parentElement.style.display='none'" 
+                        style="border: none; background: none; cursor: pointer;">✕</button>
+            </div>
+            <h3 style="margin-block-start:0px; margin-block-end:0px;">Total Through Trips</h3>
+            <p style="margin-block-start:0px;"><em>${selectedRoute} Avenue ${selectedScenario} Contraflow Closure</em></p>
+            <div style="margin-bottom: 2px;">
+                <p style="margin-block-start:0px;"><strong>Total Through Trips:</strong> ${totalTrips}</p>
+                <hr>
+            </div>
+        `;
 
-            // If not selected, add it
-            selectedOrigins.add(clickedBGId);
-            handleOriginClick(clickedBGId);
-        
-        }).catch(error => {
-            console.error("Error in hitTest:", error);
+        sidePanel.innerHTML = content;
+        sidePanel.style.display = "block";
+    }
+
+    // Initialize base map
+    updateBaseMap();
+
+    // Helper to aggregate results
+    function aggregate(results) {
+        results.features.forEach(f => {
+            const destId = f.attributes["toZone"];
+            const trips = parseInt(f.attributes["vehTrip"]);
+            
+            aggregatedTrips[destId] = (aggregatedTrips[destId] || 0) + trips;                    
         });
-    });
-        
-    function handleOriginClick(clickedBGId) {
-        
-        // Create a new feature layer for the query
-        const queryTable = new FeatureLayer({
-            url: "https://services3.arcgis.com/MV5wh5WkCMqlwISp/ArcGIS/rest/services/BCTA_Trip_Purpose/FeatureServer/1",
-            outFields: ["*"],
-            visible: false
-        });
+    }
 
-        let addDayPart;
-        let addDayType;
-        let averagingDay;
+    // Function to handle origin click
+    function handleOriginClick(clickedZone) {
 
-        // Handling for selected day
-        if (selectedDay === "Proposed") {
-            addDayType = `AND Day_Type IN ('1: Monday (M-M)', '2: Tuesday (Tu-Tu)', '3: Wednesday (W-W)', '4: Thursday (Th-Th)', '5: Friday (F-F)')`
-            averagingDay = true;
-        } else {
-            addDayType =  ` AND Day_Type = '${selectedDay}'`
-            averagingDay = false;
-        }
-        
-        // Handling for selected time
-        if (selectedTime === "Proposed") {
-            addDayPart = `AND Day_Part NOT IN ('00: All Day (12am-12am)')`
-        } else {
-            addDayPart = `AND Day_Part = '${selectedTime}'`
-        }
-        
+        let aggregatedTrips = {};
+
         // Generate query
-        const whereClause = `Origin_Zone_ID = '${clickedBGId}' ${addDayType} ${addDayPart}`;
-        console.log("Query for ALL times:", whereClause);
-        
-        queryTable.load().then(() => {
-            return queryTable.queryFeatures({
-                where: whereClause,
-                outFields: ["Origin_Zone_ID", "Destination_Zone_ID", "Day_Type", "Day_Part", selectedPurpose],
-                returnGeometry: false
-            });
-        }).then(function(results) {
-            console.log("Query results:", {
-                originId: clickedBGId,
-                featuresFound: results.features.length
-            });
+        const whereClause = `fromZone = '${clickedZone}'`;
+        console.log("Query for TAZs:", whereClause);
+
+        if (selectedRoute === "Both") {
+            const fifthTable = getQueryTable(selectedScenario + "Fifth");
+            fifthTable.load().then(() => {
+                return fifthTable.queryFeatures({
+                    where: whereClause,
+                    outFields: ["*"],
+                    returnGeometry: false
+                });
+            }).then(function (results) {
+
+                if (!results.features.length) {
+                    console.log("No thru-Fifth destinations found for origin:", clickedZone);
+                    return;
+                }
+
+                console.log("Fifth results:", {
+                    originId: clickedZone,
+                    featuresFound: results.features.length
+                });
             
-            if (!results.features.length) {
-                console.log("No destinations found for origin:", clickedBGId);
-                return;
-            }
-            
-            // Aggregate results by destination, summing across time periods AND days then divide by 5 if needed
-            const aggregatedTrips = {};
-            results.features.forEach(f => {
-                const destId = f.attributes.Destination_Zone_ID.toString();
-                const trips = parseInt(f.attributes[selectedPurpose]);
-                
-                aggregatedTrips[destId] = (aggregatedTrips[destId] || 0) + trips;                    
+                aggregate(results);
             });
 
+            const forbesTable = getQueryTable(selectedScenario + "Forbes");
+            forbesTable.load().then(() => {
+                return forbesTable.queryFeatures({
+                    where: whereClause,
+                    outFields: ["*"],
+                    returnGeometry: false
+                });
+            }).then(function (results) {
+                
+                if (!results.features.length) {
+                    console.log("No thru-Forbes destinations found for origin:", clickedZone);
+                    return;
+                }
+
+                console.log("Forbes results:", {
+                    originId: clickedZone,
+                    featuresFound: results.features.length
+                });
+                
+                aggregate(results);
+            });
+
+        } else {
+            const queryTable = getQueryTable(selectedScenario+selectedRoute);
+            queryTable.load().then(() => {
+                return queryTable.queryFeatures({
+                    where: whereClause,
+                    outFields: ["*"],
+                    returnGeometry: false
+                });
+            }).then(function(results) {
+                
+                if (!results.features.length) {
+                    console.log("No destinations found for origin:", clickedZone);
+                    return;
+                }
+
+                console.log("Query results:", {
+                    originId: clickedZone,
+                    featuresFound: results.features.length
+                });
+                
+                aggregate(results);
+            });
+        }
+        
+        if (aggregatedTrips.length === 0) {
+            return;
+        } else {
             // Store aggregated results
-            tripData[clickedBGId] = {};
+            tripData[clickedZone] = {};
             Object.entries(aggregatedTrips).forEach(([destId, trips]) => {
-                tripData[clickedBGId][destId] = averagingDay ? Math.round(trips / 5) : trips;
+                tripData[clickedZone][destId] = trips;
             });
             
-            console.log("Results summary (All Times):", {
-                originId: clickedBGId,
+            console.log("Results summary:", {
+                originId: clickedZone,
                 totalDestinations: Object.keys(aggregatedTrips).length,
                 totalTrips: Object.values(aggregatedTrips).reduce((sum, trips) => sum + trips, 0)
             });
 
             updateDisplay();
-        }).catch(error => {
-            console.error("Error querying all time periods:", error);
-        });
-    }
+        }}
 
-    // Modify the updateDisplay function
+    // Function to dynamically update display after an origin click
     function updateDisplay() {
         view.graphics.removeAll();
 
         if (selectedOrigins.size === 0) {
-            document.getElementById("sidePanel").style.display = "none";
-            beaverCountyBG.renderer = initialRenderer;
+            updateBaseMap();
             return;
         }
 
         const originIds = Array.from(selectedOrigins).map(id => `'${id}'`).join(",");
-        const originQuery = beaverCountyBG.createQuery();
-        originQuery.where = `GEOID IN (${originIds})`;
-        originQuery.outFields = ["GEOID"];
+        const originQuery = displayLayer.createQuery();
+        originQuery.where = `CUBE_ZONE IN (${originIds})`;
+        originQuery.outFields = ["CUBE_ZONE"];
 
         // Generate classbreaks dynamically        
         const sortedCounts = Object.values(tripData).flatMap(destObj => Object.values(destObj)).sort((a, b) => a - b);
         if (sortedCounts[sortedCounts.length - 1] > 200) {
-            beaverCountyBG.renderer = generateRenderer(generateClassBreaks(sortedCounts));
+            displayLayer.renderer = generateRenderer(generateClassBreaks(sortedCounts));
         } else {
-           beaverCountyBG.renderer = generateRenderer([5, 10, 25, 50]);
+           displayLayer.renderer = generateRenderer([5, 10, 25, 50]);
         }
 
-        beaverCountyBG.queryFeatures(originQuery).then(function(originResults) {
+        displayLayer.queryFeatures(originQuery).then(function(originResults) {
             // Calculate combined trips for all destinations
             let combinedTrips = {};
             Object.values(tripData).forEach(originData => {
@@ -493,19 +518,19 @@ require([
             updateSidePanel(originResults.features, combinedTrips);
 
             // Query and highlight destinations (no borders)
-            const destQuery = beaverCountyBG.createQuery();
+            const destQuery = displayLayer.createQuery();
             const destIds = Object.keys(combinedTrips);
             if (destIds.length === 0) return;
 
-            destQuery.where = `GEOID IN (${destIds.join(",")})`;
-            destQuery.outFields = ["GEOID"];
+            destQuery.where = `CUBE_ZONE IN (${destIds.join(",")})`;
+            destQuery.outFields = ["CUBE_ZONE"];
 
-            beaverCountyBG.queryFeatures(destQuery).then(function(destResults) {
+            displayLayer.queryFeatures(destQuery).then(function(destResults) {
                 // First, add all destinations with color fills but no borders
                 destResults.features.forEach(function(f) {
-                    const destId = f.attributes.GEOID;
+                    const destId = f.attributes.CUBE_ZONE;
                     const tripCount = combinedTrips[destId] || 0;
-                    const color = getColorFromRenderer(beaverCountyBG.renderer, tripCount);
+                    const color = getColorFromRenderer(displayLayer.renderer, tripCount);
                     
                     // Only add fill color, no border
                     view.graphics.add({
@@ -536,6 +561,40 @@ require([
         });
     }
 
+    // Click handler
+    view.on("click", function(event) {
+        view.hitTest(event).then(function(response) {
+            const result = response.results.find(r =>
+                r.graphic?.layer?.id === "displayLayer"
+            );
+            if (!result) {
+                updateBaseMap()
+                return;
+            }
+
+            const clickedZone = result.graphic.attributes.CUBE_ZONE;
+            if (!clickedZone) {
+                console.error("No TAZ found in clicked feature.");
+                return;
+            }
+
+            // Click tracking - toggle selection
+            if (selectedOrigins.has(clickedZone)) {
+                selectedOrigins.delete(clickedZone);
+                delete tripData[clickedZone];
+                updateDisplay();
+                return;
+            }
+
+            // If not selected, add it
+            selectedOrigins.add(clickedZone);
+            handleOriginClick(clickedZone);
+        
+        }).catch(error => {
+            console.error("Error in hitTest:", error);
+        });
+    });
+
     // Function to update side panel content
     function updateSidePanel(originFeatures, combinedTrips) {
         const sidePanel = document.getElementById("sidePanel") || createSidePanel();
@@ -545,17 +604,17 @@ require([
                 <button onclick="this.parentElement.parentElement.style.display='none'" 
                         style="border: none; background: none; cursor: pointer;">✕</button>
             </div>
-            <h3 style="margin-block-start:0px; margin-block-end:0px;">Selected Block Groups</h3>
-            <p style="margin-block-start:0px;"><em>${tripPurposeLabel} Trips</em></p>
+            <h3 style="margin-block-start:0px; margin-block-end:0px;">Selected TAZ</h3>
+            <p style="margin-block-start:0px;"><em>${selectedRoute} Avenue ${selectedScenario} Contraflow Closure</em></p>
         `;
 
         originFeatures.forEach(feature => {
-            const bgId = feature.attributes.GEOID;
-            const totalTrips = Object.values(tripData[bgId] || {}).reduce((sum, trips) => sum + trips, 0);
+            const zoneID = feature.attributes.CUBE_ZONE;
+            const totalTrips = Object.values(tripData[zoneID] || {}).reduce((sum, trips) => sum + trips, 0);
             
             content += `
                 <div style="margin-bottom: 2px;">
-                    <p style="margin-block-end:0px;"><strong>Block Group:</strong> ${bgId}</p>
+                    <p style="margin-block-end:0px;"><strong>Block Group:</strong> ${zoneID}</p>
                     <p style="margin-block-start:0px;"><strong>Total Outbound Trips:</strong> ${totalTrips}</p>
                     <hr>
                 </div>
@@ -566,93 +625,58 @@ require([
         sidePanel.style.display = "block";
     }
 
-    // Function to create side panel if it doesn't exist
-    function createSidePanel() {
-        const sidePanel = document.createElement("div");
-        sidePanel.id = "sidePanel";
-        sidePanel.style.cssText = `
-            position: absolute;
-            left: 39px;
-            background: white;
-            padding: 15px;
-            border-radius: 3px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-            width: 270px;
-            z-index: 1000;
-            display: none;
-            max-height: 300%;
-            overflow-y: auto;
-        `;
-        view.ui.add(sidePanel, "top-left");
-        return sidePanel;
+    // Linking logic
+    function updateLayerFilter() {
+        tripData = {};
+        view.graphics.removeAll();
+        // Re-run click logic for each already-selected origin
+        if (selectedOrigins.size === 0) {
+            updateBaseMap();
+        } else {
+            selectedOrigins.forEach(zoneID => handleOriginClick(zoneID));
+        }
+        
     }
 
-    // Add pointer-move handler for tooltips
-    view.on("pointer-move", function(event) {
-        view.hitTest(event).then(function(response) {
-            const result = response.results.find(r =>
-                r.graphic && r.graphic.layer && r.graphic.layer.id === "BeaverCounty_BG"
-            );
-            
-            if (!result) {
-                tooltip.style.display = "none";
-                return;
-            }
-
-            const hoveredBGId = result.graphic.attributes.GEOID;
-            let tooltipContent = `<strong>Block Group:</strong> ${hoveredBGId}`;
-            
-            // Check if this is a selected origin
-            if (selectedOrigins.has(hoveredBGId)) {
-                tooltipContent += `<br><em>Selected Origin</em>`;
-                
-                // Show inbound trips to this selected origin (trips ending here)
-                let totalInbound = 0;
-                Object.values(tripData).forEach(originData => {
-                    totalInbound += originData[hoveredBGId] || 0;
-                });
-                
-                if (totalInbound > 0) {
-                    tooltipContent += `<br><strong>Inbound ${tripPurposeLabel} Trips:</strong> ${totalInbound}`;
-                }
-
-                // Show total outbound trips for this origin
-                const totalOutbound = Object.values(tripData[hoveredBGId] || {}).reduce((sum, trips) => sum + trips, 0);
-                if (totalOutbound > 0) {
-                    tooltipContent += `<br><strong>Total Outbound ${tripPurposeLabel} Trips:</strong> ${totalOutbound}`;
-                }
-                
-            } else if (selectedOrigins.size > 0) {
-                // Check if this is a destination with trips
-                let totalInbound = 0;
-                
-                Object.values(tripData).forEach(originData => {
-                    totalInbound += originData[hoveredBGId] || 0;
-                });
-
-                if (totalInbound > 0) {
-                    tooltipContent += `<br><strong>Inbound ${tripPurposeLabel} Trips:</strong> ${totalInbound}`;
-                } else {
-                    tooltipContent += `<br><em>No trips to this area</em>`;
-                }
-            } else {
-                tooltipContent += `<br><em>Click to select as origin</em>`;
-            }
-            
-            // Position and show tooltip
-            tooltip.style.left = event.x + 10 + "px";
-            tooltip.style.top = event.y + 10 + "px";
-            tooltip.style.display = "block";
-            tooltip.innerHTML = tooltipContent;
-        });
+    // Event handlers for filters
+    document.getElementById("routeSelect").addEventListener("change", function(e) {
+        selectedRoute = e.target.value;
+        // Log the selection
+        console.log("Selected route:", selectedRoute);
+        updateLayerFilter();
     });
 
-    // Hide tooltip when moving the map
-    view.on("drag", function() {
-        tooltip.style.display = "none";
+    document.getElementById("scenarioSelect").addEventListener("change", function(e) {
+        selectedScenario = e.target.value;
+        // Log the selection
+        console.log("Selected scenario:", selectedScenario);       
+        updateLayerFilter();
     });
 
-    // Initialize side panel
-    createSidePanel();
+     // Update the legend configuration
+    const legend = new Legend({
+        view: view,
+        style: "classic",
+        layerInfos: [
+            {
+                layer: displayLayer,
+                title: "Inbound Trips"
+            },
+            {
+                layer: zoneBoundary,
+                title: "Traffic Analysis Zone"
+            }
+        ]
+    });
+
+    const legendExpand = new Expand({
+        view: view,
+        content: legend,
+        expanded: true,
+        expandIconClass: "esri-icon-legend",
+        mode: "floating"
+    });
+
+    view.ui.add(legendExpand, "bottom-left");
 
 });

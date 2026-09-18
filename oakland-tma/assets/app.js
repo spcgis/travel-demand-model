@@ -358,6 +358,7 @@ require([
             });
 
             baseSidePanel();
+            updateLegend("Outbound Trips");
 
         } catch (error) {
             console.error("Error updating base map:", error);
@@ -561,6 +562,7 @@ require([
                     }
                 });
             });
+        updateLegend("Inbound Trips");
         } catch (error) {
             console.error("Error updating display:", error);
         }
@@ -625,6 +627,47 @@ require([
         sidePanel.style.display = "block";
     }
 
+    let legend;
+    let legendExpand;
+
+    legend = new Legend({
+        view: view,
+        style: "classic",
+        layerInfos: [
+            {
+                layer: displayLayer,
+                title: "Outbound Trips"
+            },
+            {
+                layer: zoneBoundary,
+                title: "Traffic Analysis Zone"
+            }
+        ]
+    });
+
+    legendExpand = new Expand({
+        view: view,
+        content: legend,
+        expanded: true,
+        expandIconClass: "esri-icon-legend",
+        mode: "floating"
+    });
+
+    view.ui.add(legendExpand, "bottom-left");
+
+    function updateLegend(countLabel) {
+        legend.layerInfos = [
+            {
+                layer: displayLayer,
+                title: countLabel
+            },
+            {
+                layer: zoneBoundary,
+                title: "Traffic Analysis Zone"
+            }
+        ];
+    }
+
     // Event handlers for filters
     document.getElementById("routeSelect").addEventListener("change", function (e) {
         selectedRoute = e.target.value;
@@ -637,39 +680,4 @@ require([
         console.log("Selected scenario:", selectedScenario);
         updateLayerFilter();
     });
-
-    // Update the legend configuration
-
-    let countLabel;
-    if (selectedOrigins.size === 0) {
-        countLabel = "Outbound Trips";
-    } else {
-        countLabel = "Inbound Trips";
-    }
-    
-    const legend = new Legend({
-        view: view,
-        style: "classic",
-        layerInfos: [
-            {
-                layer: displayLayer,
-                title: countLabel
-            },
-            {
-                layer: zoneBoundary,
-                title: "Traffic Analysis Zone"
-            }
-        ]
-    });
-
-    const legendExpand = new Expand({
-        view: view,
-        content: legend,
-        expanded: true,
-        expandIconClass: "esri-icon-legend",
-        mode: "floating"
-    });
-
-    view.ui.add(legendExpand, "bottom-left");
-
 });

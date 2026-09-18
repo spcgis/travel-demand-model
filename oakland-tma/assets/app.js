@@ -637,14 +637,23 @@ require([
         console.log("Selected scenario:", selectedScenario);
         updateLayerFilter();
     });
-     // Update the legend configuration
+
+    // Update the legend configuration
+
+    let countLabel;
+    if (selectedOrigins.size === 0) {
+        countLabel = "Outbound Trips";
+    } else {
+        countLabel = "Inbound Trips";
+    }
+    
     const legend = new Legend({
         view: view,
         style: "classic",
         layerInfos: [
             {
                 layer: displayLayer,
-                title: "Inbound Trips"
+                title: countLabel
             },
             {
                 layer: zoneBoundary,

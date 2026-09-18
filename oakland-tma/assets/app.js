@@ -285,76 +285,110 @@ require([
     }
 
     // Function to update base display
-    function updateBaseMap() {
-        // Refresh
+    async function updateBaseMap() {
         view.graphics.removeAll();
         tripData = {};
+
         let targetCols;
 
-        // Get target column & query the table
         if (selectedRoute === "Both") {
-            targetCols = [selectedScenario + "Forbes", selectedScenario + "Fifth"];
+            targetCols = [
+                selectedScenario + "Forbes",
+                selectedScenario + "Fifth"
+            ];
         } else {
-            targetCols = selectedScenario + selectedRoute;
+            targetCols = [
+                selectedScenario + selectedRoute
+            ];
         }
-        
-        // Create feature layer for query
+
         const queryTable = getQueryTable("summaryTable");
-        queryTable.load().then(() => {
-        console.log("Selected:", targetCols);
-        return queryTable.queryFeatures({
-            where: "1=1",
-            outFields: ["*"],
-            returnGeometry: false
+
+        try {
+            await queryTable.load();
+
+            console.log("Selected:", targetCols);
+
+            const results = await queryTable.queryFeatures({
+                where: "1=1",
+                outFields: ["*"],
+                returnGeometry: false
             });
-        }).then(results => {
+
             results.features.forEach(feature => {
                 const attrs = feature.attributes;
                 const zone = attrs["Zone"];
 
-                if (selectedRoute === "Both") {
-                    const total = targetCols.reduce((sum, fieldName) => {
-                        return sum + (Number(attrs[fieldName]) || 0);
-                    }, 0);
-                    tripData[zone] = total;
-                } else {
-                    tripData[zone] = Number(attrs[targetCols]) || 0;
-                }
+                const total = targetCols.reduce((sum, fieldName) => {
+                    return sum + (Number(attrs[fieldName]) || 0);
+                }, 0);
+
+                tripData[zone] = total;
             });
-        });
 
-        const sortedCounts = Object.values(tripData).flatMap(obj => Object.values(obj)).sort((a, b) => a - b);
-        if (sortedCounts[sortedCounts.length - 1] > 200) {
-            displayLayer.renderer = generateRenderer(generateClassBreaks(sortedCounts));
-        } else {
-           displayLayer.renderer = generateRenderer([5, 10, 25, 50]);
-        }
+            const sortedCounts = Object.values(tripData)
+                .sort((a, b) => a - b);
 
-        displayLayer.features.forEach(feature => {
-            const zone = feature.attributes["CUBE_ZONE"];
-            const tripCount = tripData[zone] || 0;
-            const color = getColorFromRenderer(displayLayer.renderer, tripCount);
+            if (
+                sortedCounts.length > 0 &&
+                sortedCounts[sortedCounts.length - 1] > 200
+            ) {
+                displayLayer.renderer = generateRenderer(
+                    generateClassBreaks(sortedCounts)
+                );
+            } else {
+                displayLayer.renderer = generateRenderer([
+                    5, 10, 25, 50
+                ]);
+            }
 
-            view.graphics.add({
-                        geometry: f.geometry,
-                        symbol: {
-                            type: "simple-fill",
-                            color: color,
-                            outline: { color: [0, 128, 0], width: 1 } 
+            // Query the display layer for the geometries to draw
+            const displayResults = await displayLayer.queryFeatures({
+                where: "1=1",
+                returnGeometry: true,
+                outFields: ["CUBE_ZONE"]
+            });
+
+            displayResults.features.forEach(feature => {
+                const zone = feature.attributes["CUBE_ZONE"];
+                const tripCount = tripData[zone] || 0;
+
+                const color = getColorFromRenderer(
+                    displayLayer.renderer,
+                    tripCount
+                );
+
+                view.graphics.add({
+                    geometry: feature.geometry,
+                    symbol: {
+                        type: "simple-fill",
+                        color: color,
+                        outline: {
+                            color: [0, 128, 0],
+                            width: 1
                         }
-                    });
-        });
-        baseSidePanel();
+                    }
+                });
+            });
+
+            baseSidePanel();
+
+        } catch (error) {
+            console.error("Error updating base map:", error);
+        }
     }
+
 
     // Function to update side-panel display with base map information
     function baseSidePanel() {
-        const sidePanel = document.getElementById("sidePanel");
+        let sidePanel = !document.getElementById("sidePanel");
+        if (!document.getElementById("sidePanel")) {
+            sidePanel = createSidePanel();
+        }
 
-        const totalTrips = Object.entries(tripData)
-            .filter(([column]) => column !== "Zone")
-            .reduce((total, [, values]) => {
-                return total + values.reduce((sum, value) => sum + Number(value), 0);
+        const totalTrips = Object.values(tripData)
+            .reduce((total, value) => {
+                return total + (Number(value) || 0);
             }, 0);
 
         const content = `
@@ -363,9 +397,13 @@ require([
                         style="border: none; background: none; cursor: pointer;">✕</button>
             </div>
             <h3 style="margin-block-start:0px; margin-block-end:0px;">Total Through Trips</h3>
-            <p style="margin-block-start:0px;"><em>${selectedRoute} Avenue ${selectedScenario} Contraflow Closure</em></p>
+            <p style="margin-block-start:0px;">
+                <em>${selectedRoute} Avenue ${selectedScenario} Contraflow Closure</em>
+            </p>
             <div style="margin-bottom: 2px;">
-                <p style="margin-block-start:0px;"><strong>Total Through Trips:</strong> ${totalTrips}</p>
+                <p style="margin-block-start:0px;">
+                    <strong>Total Through Trips:</strong> ${totalTrips}
+                </p>
                 <hr>
             </div>
         `;

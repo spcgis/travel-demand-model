@@ -220,7 +220,7 @@ require([
         return queryTables[key];
     }
 
-    // Black Outline
+    // Green outline
     const outlineRenderer = {
         type: "simple",
         symbol: {
@@ -239,6 +239,50 @@ require([
         renderer: outlineRenderer
     });
     map.add(zoneBoundary);
+
+    // special renderer for oakland TAZ
+    const oaklandTAZRenderer = {
+        type: "simple",
+        symbol: {
+            type: "cim",
+            data: {
+                type: "CIMSymbolReference",
+                symbol: {
+                    type: "CIMPolygonSymbol",
+                    symbolLayers: [{
+                        type: "CIMHatchFill",
+                        enable: true,
+                        rotation: 45,
+                        separation: 8,
+                        lineSymbol: {
+                            type: "CIMLineSymbol",
+                            symbolLayers: [{
+                                type: "CIMSolidStroke",
+                                enable: true,
+                                width: 1.5,
+                                color: [0, 0, 0, 255]
+                            }]
+                        }
+                    },{ //green outline
+                        type: "CIMSolidStroke",
+                        enable: true,
+                        width: 1,
+                        color: [0, 128, 0, 255]
+                    }]
+                }
+            }
+        }
+    };
+
+    // Layer for Oakland TAZ
+    const oaklandTAZ = new FeatureLayer({
+        url: baseURL + tableURL.layer,
+        id: "oaklandTAZ",
+        outFields: ["*"],
+        visible: true,
+        renderer: oaklandTAZRenderer,
+        definitionExpression: "CUBE_ZONE IN (18,25,26,27,28,29,30,31,32,983)"
+    });
 
     // Layer for display
     const displayLayer = new FeatureLayer({
@@ -359,6 +403,12 @@ require([
 
             baseSidePanel();
             updateLegend("Outbound Trips");
+            if (!map.layers.includes(oaklandTAZ)) {
+                map.add(oaklandTAZ);
+            } else {
+                map.remove(oaklandTAZ);
+                map.add(oaklandTAZ);
+            }
 
         } catch (error) {
             console.error("Error updating base map:", error);
@@ -563,6 +613,8 @@ require([
                 });
             });
         updateLegend("Inbound Trips");
+        map.remove(oaklandTAZ);
+        map.add(oaklandTAZ);
         } catch (error) {
             console.error("Error updating display:", error);
         }
@@ -641,6 +693,10 @@ require([
             {
                 layer: zoneBoundary,
                 title: "Traffic Analysis Zone"
+            },
+            {
+                layer: oaklandTAZ,
+                title: "Oakland TAZs"
             }
         ]
     });
@@ -664,6 +720,10 @@ require([
             {
                 layer: zoneBoundary,
                 title: "Traffic Analysis Zone"
+            },
+            {
+                layer: oaklandTAZ,
+                title: "Oakland TAZs"
             }
         ];
     }

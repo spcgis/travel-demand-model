@@ -184,7 +184,6 @@ require([
         z-index: 1000;
     `;
 
-    // Update filterDiv innerHTML to include the mode selection dropdown
     filterDiv.innerHTML = `
     <div style="margin-bottom: 10px;">
         <label for="routeSelect">Through Route:</label></br>
@@ -293,6 +292,13 @@ require([
     });
     map.add(displayLayer);
 
+    // Warm up layer connections in parallel as soon as the module runs
+    Promise.all([
+        displayLayer.load(),
+        zoneBoundary.load(),
+        oaklandTAZ.load()
+    ]).catch(error => console.error("Error preloading layers:", error));
+
     // Function to create side panel if it doesn't exist
     function createSidePanel() {
         const sidePanel = document.createElement("div");
@@ -312,6 +318,15 @@ require([
         `;
         view.ui.add(sidePanel, "top-left");
         return sidePanel;
+    }
+
+    // Bring the Oakland TAZ hatch layer back above the drawn graphics
+    function bringOaklandTAZToFront() {
+        if (!map.layers.includes(oaklandTAZ)) {
+            map.add(oaklandTAZ);
+        } else {
+            map.reorder(oaklandTAZ, map.layers.length - 1);
+        }
     }
 
     // Function to update base display
@@ -335,15 +350,21 @@ require([
         const queryTable = getQueryTable("summaryTable");
 
         try {
-            await queryTable.load();
-
             console.log("Selected:", targetCols);
 
-            const results = await queryTable.queryFeatures({
-                where: "1=1",
-                outFields: ["*"],
-                returnGeometry: false
-            });
+            // Run summary-table query and the display-layer geometry concurrently
+            const [results, displayResults] = await Promise.all([
+                queryTable.load().then(() => queryTable.queryFeatures({
+                    where: "1=1",
+                    outFields: ["*"],
+                    returnGeometry: false
+                })),
+                displayLayer.queryFeatures({
+                    where: "1=1",
+                    returnGeometry: true,
+                    outFields: ["CUBE_ZONE"]
+                })
+            ]);
 
             results.features.forEach(feature => {
                 const attrs = feature.attributes;
@@ -372,13 +393,6 @@ require([
                 ]);
             }
 
-            // Query the display layer for the geometries to draw
-            const displayResults = await displayLayer.queryFeatures({
-                where: "1=1",
-                returnGeometry: true,
-                outFields: ["CUBE_ZONE"]
-            });
-
             displayResults.features.forEach(feature => {
                 const zone = feature.attributes["CUBE_ZONE"];
                 const tripCount = tripData[zone] || 0;
@@ -403,19 +417,13 @@ require([
 
             baseSidePanel();
             updateLegend("Outbound Trips");
-            if (!map.layers.includes(oaklandTAZ)) {
-                map.add(oaklandTAZ);
-            } else {
-                map.remove(oaklandTAZ);
-                map.add(oaklandTAZ);
-            }
+            bringOaklandTAZToFront();
 
         } catch (error) {
             console.error("Error updating base map:", error);
         }
     }
-
-
+    
     // Function to update side-panel display with base map information
     function baseSidePanel() {
         let sidePanel = document.getElementById("sidePanel");
@@ -613,8 +621,7 @@ require([
                 });
             });
         updateLegend("Inbound Trips");
-        map.remove(oaklandTAZ);
-        map.add(oaklandTAZ);
+        bringOaklandTAZToFront();
         } catch (error) {
             console.error("Error updating display:", error);
         }

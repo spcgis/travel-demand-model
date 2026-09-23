@@ -137,8 +137,7 @@ const tableURL = {
         "afterFifth": "1",
         "afterForbes": "2",
         "beforeFifth": "3",
-        "beforeForbes": "4",
-        "summaryTable": "5"
+        "beforeForbes": "4"
     };
 
 // ArcOnline operations
@@ -330,99 +329,69 @@ require([
     }
 
     // Function to update base display
-    async function updateBaseMap() {
-        view.graphics.removeAll();
-        tripData = {};
+async function updateBaseMap() {
+    view.graphics.removeAll();
 
-        let targetCols;
+    const targetCol = selectedScenario + selectedRoute;
 
-        if (selectedRoute === "Both") {
-            targetCols = [
-                selectedScenario + "Forbes",
-                selectedScenario + "Fifth"
-            ];
+    try {
+        console.log("Selected:", targetCol);
+
+        const displayResults = await displayLayer.queryFeatures({
+            where: "1=1",
+            returnGeometry: true,
+            outFields: ["CUBE_ZONE", targetCol]
+        });
+
+        const sortedCounts = displayResults.features
+            .map(feature => feature.attributes[targetCol])
+            .sort((a, b) => a - b);
+
+        if (
+            sortedCounts.length > 0 &&
+            sortedCounts[sortedCounts.length - 1] > 200
+        ) {
+            displayLayer.renderer = generateRenderer(
+                generateClassBreaks(sortedCounts)
+            );
         } else {
-            targetCols = [
-                selectedScenario + selectedRoute
-            ];
-        }
-
-        const queryTable = getQueryTable("summaryTable");
-
-        try {
-            console.log("Selected:", targetCols);
-
-            // Run summary-table query and the display-layer geometry concurrently
-            const [results, displayResults] = await Promise.all([
-                queryTable.load().then(() => queryTable.queryFeatures({
-                    where: "1=1",
-                    outFields: ["*"],
-                    returnGeometry: false
-                })),
-                displayLayer.queryFeatures({
-                    where: "1=1",
-                    returnGeometry: true,
-                    outFields: ["CUBE_ZONE"]
-                })
+            displayLayer.renderer = generateRenderer([
+                5, 10, 25, 50
             ]);
-
-            results.features.forEach(feature => {
-                const attrs = feature.attributes;
-                const zone = attrs["Zone"];
-
-                const total = targetCols.reduce((sum, fieldName) => {
-                    return sum + (Number(attrs[fieldName]) || 0);
-                }, 0);
-
-                tripData[zone] = total;
-            });
-
-            const sortedCounts = Object.values(tripData)
-                .sort((a, b) => a - b);
-
-            if (
-                sortedCounts.length > 0 &&
-                sortedCounts[sortedCounts.length - 1] > 200
-            ) {
-                displayLayer.renderer = generateRenderer(
-                    generateClassBreaks(sortedCounts)
-                );
-            } else {
-                displayLayer.renderer = generateRenderer([
-                    5, 10, 25, 50
-                ]);
-            }
-
-            displayResults.features.forEach(feature => {
-                const zone = feature.attributes["CUBE_ZONE"];
-                const tripCount = tripData[zone] || 0;
-
-                const color = getColorFromRenderer(
-                    displayLayer.renderer,
-                    tripCount
-                );
-
-                view.graphics.add({
-                    geometry: feature.geometry,
-                    symbol: {
-                        type: "simple-fill",
-                        color: color,
-                        outline: {
-                            color: [0, 128, 0],
-                            width: 1
-                        }
-                    }
-                });
-            });
-
-            baseSidePanel();
-            updateLegend("Outbound Trips");
-            bringOaklandTAZToFront();
-
-        } catch (error) {
-            console.error("Error updating base map:", error);
         }
+
+        displayResults.features.forEach(feature => {
+            const tripCount = feature.attributes[targetCol] || 0;
+            const zone = feature.attributes["CUBE_ZONE"] || 0;
+            tripData[zone] = tripCount;
+
+            const color = getColorFromRenderer(
+                displayLayer.renderer,
+                tripCount
+            );
+
+            view.graphics.add({
+                geometry: feature.geometry,
+                symbol: {
+                    type: "simple-fill",
+                    color: color,
+                    outline: {
+                        color: [0, 128, 0],
+                        width: 1
+                    }
+                }
+            });
+        });
+
+        baseSidePanel();
+        updateLegend("Outbound Trips");
+        bringOaklandTAZToFront();
+
+    } catch (error) {
+        console.error("Error updating base map:", error);
     }
+}
+
     
     // Function to update side-panel display with base map information
     function baseSidePanel() {

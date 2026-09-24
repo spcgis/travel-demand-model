@@ -331,6 +331,7 @@ require([
     // Function to update base display
 async function updateBaseMap() {
     view.graphics.removeAll();
+    tripData = {};
 
     const targetCol = selectedScenario + selectedRoute;
 
@@ -360,7 +361,7 @@ async function updateBaseMap() {
             ]);
         }
 
-        displayResults.features.forEach(feature => {
+        await displayResults.features.forEach(feature => {
             const tripCount = feature.attributes[targetCol] || 0;
             const zone = feature.attributes["CUBE_ZONE"] || 0;
             tripData[zone] = tripCount;
@@ -381,6 +382,7 @@ async function updateBaseMap() {
                     }
                 }
             });
+
         });
 
         baseSidePanel();
@@ -396,6 +398,7 @@ async function updateBaseMap() {
     // Function to update side-panel display with base map information
     function baseSidePanel() {
         let sidePanel = document.getElementById("sidePanel");
+
         if (!document.getElementById("sidePanel")) {
             sidePanel = createSidePanel();
         }

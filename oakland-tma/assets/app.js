@@ -336,9 +336,9 @@ async function updateBaseMap() {
 
     try {
         console.log("Selected:", targetCol);
-
+        
         const displayResults = await displayLayer.queryFeatures({
-            where: "1=1",
+            where: `${targetCol} != 0`,
             returnGeometry: true,
             outFields: ["CUBE_ZONE", targetCol]
         });

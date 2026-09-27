@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1, user-scalable=no">
+    <title>SPC OD Tool</title>
+    <link rel="stylesheet" 
+        href="https://js.arcgis.com/5.1/esri/themes/light/main.css">
+    <link rel="stylesheet" 
+        href="./assets/styles.css">
+    <script type="module" 
+        src="https://js.arcgis.com/5.1/"></script>
+    <script type="module" 
+        src="./assets/app.js"></script>
+</head>
+<body>
+    <div class = "container">
+    <!-- Upper block: Container of GUI -->
+        <div class = "header-container">
+            <button id="toggleHeader" class="toggle-arrow">▲</button>
+            <!-- Left block: Header content -->
+            <div class = "main-header">
+                <h2 style="font-family:Helvetica; margin-bottom:0px;">SPC Model Validation</h2>
+                <p style="font-family:Helvetica; font-size:medium;"><b>Current Focus: </b> I-70
+                </p>
+            </div>
+            <!-- Right block: Logos -->
+            <div class = "logos">
+                <img src="./assets/SPC_Wht.png" style="height: clamp(70px, 75px, 85px); width: auto;"/>
+            </div>
+        </div>
+        <!-- Lower block: the Map -->
+        <div id="viewDiv"></div>
+    </div>
+    <script>    
+    // Configure the expansion arrow
+    document.addEventListener("DOMContentLoaded", () => {
+        const header = document.querySelector(".header-container");
+        const btn = document.getElementById("toggleHeader");
+
+        btn.addEventListener("click", () => {
+            header.classList.toggle("header-collapsed");
+
+            // Update arrow direction
+            btn.textContent = header.classList.contains("header-collapsed") ? "▼" : "▲";
+        });
+    });
+    </script>
+</body>
+</html>

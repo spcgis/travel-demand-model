@@ -15,13 +15,24 @@
 </head>
 <body>
     <div class = "container">
+    <!-- Loading screen -->
+        <div id="loading-screen">
+            <div class="loading-content">
+            <div class="spinner"></div>
+            <h2>Loading application...</h2>
+            <p id="loading-status">Initializing map</p>
+            </div>
+        </div>
     <!-- Upper block: Container of GUI -->
         <div class = "header-container">
             <button id="toggleHeader" class="toggle-arrow">▲</button>
             <!-- Left block: Header content -->
             <div class = "main-header">
-                <h2 style="font-family:Helvetica; margin-bottom:0px;">SPC Model Validation</h2>
-                <p style="font-family:Helvetica; font-size:medium;"><b>Current Focus: </b> I-70
+                <h2 style="font-family:Helvetica; margin-bottom:0px;">SPC Model Validation | Current Focus: I-70 & I-79</h2>
+                <p style="font-family:Helvetica; font-size:medium;">
+                    <b>Unbuild</b> - DC25 loaded network, no change<br>
+                    <b>Speed Change</b> - Increasing freeflow speed definitions for freeways<br>
+                    <b>Speed Change (Difference)</b> - Difference in volume between Speed Change and Unbuild scenarios<br>
                 </p>
             </div>
             <!-- Right block: Logos -->

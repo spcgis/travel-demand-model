@@ -1,124 +1,157 @@
-// Standardized SPC class break functions
-// 5 jenks class breaks, each limit is rounded and divisible by 5
+// Renderer for app
+const [colorRendererCreator] = await $arcgis.import([
+    "@arcgis/core/smartMapping/renderers/color.js",
+]);
 
-// Jenks class breaks algorithm
-export function generateClassBreaks(data, numClasses = 5) {
-    if (!data || data.length === 0) return [5, 10, 25, 50];
-    const n = data.length;
+const zoneOutline = { color: [0, 0, 0], width: 1 } // Black outline
 
-    // Initialize matrices
-    const mat1 = Array.from({ length: n + 1 }, () => Array(numClasses + 1).fill(0));
-    const mat2 = Array.from({ length: n + 1 }, () => Array(numClasses + 1).fill(0));
+export const boundaryRenderer = {
+    type: "simple",
+    symbol: {
+        type: "simple-fill",
+        color: [255, 255, 255, 0], // Transparent white 
+        outline: zoneOutline
+    }
+};
 
-    for (let i = 1; i <= numClasses; i++) {
-        mat1[0][i] = 1;
-        mat2[0][i] = 0;
-        for (let j = 1; j <= n; j++) {
-            mat2[j][i] = Infinity;
-        }
+const tripColors = [
+     [180, 230, 180, 0.7],
+     [255, 241, 169, 0.7],
+     [254, 204, 92, 0.7],
+     [253, 141, 60, 0.7],
+     [240, 59, 32, 0.7],
+     [189, 0, 38, 0.7]
+];
+
+const areaTypeRenderer = {
+  type: "unique-value",
+  field: "areaType",
+  uniqueValueInfos: [
+    {
+      value: 1,
+      label: "Urban Core / Dense Commercial",
+      symbol: {
+        type: "simple-fill",
+        color: [242, 76, 0, 0.7]
+      }
+    },
+    {
+      value: 2,
+      label: "Urban Commercial / Dense Residential",
+      symbol: {
+        type: "simple-fill",
+        color: [252, 122, 30, 0.7]
+      }
+    },
+    {
+      value: 3,
+      label: "Urban Residential / Suburban Commercial",
+      symbol: {
+        type: "simple-fill",
+        color: [249, 199, 132, 0.7]
+      }
+    },
+    {
+      value: 4,
+      label: "Suburban Residential",
+      symbol: {
+        type: "simple-fill",
+        color: [231, 231, 231, 0.7]
+      }
+    },
+    {
+      value: 5,
+      label: "Exurban",
+      symbol: {
+        type: "simple-fill",
+        color: [72, 86, 150, 0.7]
+      }
+    }
+  ]
+};
+
+
+const rendererConfig = {
+//   "inbound": {
+//     field: "inbound",
+//     colors: tripColors,
+//     unit: "trip"
+//   },
+//   "outbound": {
+//     field: "inbound",
+//     colors: tripColors,
+//     unit: "trip"
+//   },
+  "intrazonal": {
+    field: "intrazonal",
+    colors: tripColors,
+    unit: "trip"
+  },
+
+  "popden": {
+    field: "popden",
+    colors: [
+      [239, 243, 255, 0.7],
+      [189, 215, 231, 0.7],
+      [107, 174, 214, 0.7],
+      [49, 130, 189, 0.7],
+      [8, 81, 156, 0.7]
+    ],
+    unit: "people/sq mile"
+  },
+
+  "emden": {
+    field: "emden",
+    colors: [
+      [242, 240, 247, 0.7],
+      [203, 201, 226, 0.7],
+      [158, 154, 200, 0.7],
+      [117, 107, 177, 0.7],
+      [84, 39, 143, 0.7]
+    ],
+    unit: "employee/sq mile"
+  }
+};
+
+export async function applyRenderer(type, layer) {
+    if (type === "none") {
+        return boundaryRenderer;
     }
 
-    let v = 0;
-    for (let l = 2; l <= n; l++) {
-        let s1 = 0, s2 = 0, w = 0;
-        for (let m = 1; m <= l; m++) {
-            const i3 = l - m + 1;
-            const val = data[i3 - 1];
-
-            s2 += val * val;
-            s1 += val;
-            w++;
-
-            v = s2 - (s1 * s1) / w;
-            const i4 = i3 - 1;
-            if (i4 !== 0) {
-                for (let j = 2; j <= numClasses; j++) {
-                    if (mat2[l][j] >= (v + mat2[i4][j - 1])) {
-                        mat1[l][j] = i3;
-                        mat2[l][j] = v + mat2[i4][j - 1];
-                    }
-                }
-            }
-        }
-        mat1[l][1] = 1;
-        mat2[l][1] = v;
+    if (type == "areaType") {
+        return areaTypeRenderer;
     }
 
-    // Backtrack to find class breaks
-    const breaks = Array(numClasses + 1).fill(0);
-    breaks[numClasses] = data[data.length - 1];
-    let k = n;
-    for (let j = numClasses; j >= 2; j--) {
-        const id = mat1[k][j] - 2;
-        breaks[j - 1] = data[id];
-        k = mat1[k][j] - 1;
+    const config = rendererConfig[type];
+
+    const { renderer } =
+        await colorRendererCreator.createClassBreaksRenderer({
+          layer: layer,
+          field: config.field,
+          classificationMethod: "natural-breaks",
+          numClasses: 5
+        });
+    
+    const overallMax = renderer.classBreakInfos.at(-1).maxValue;
+    let increment;
+    if (overallMax <= 100) {
+        increment = 5;
+    } else if (overallMax <= 500) {
+        increment = 25;
+    } else if (overallMax <= 1000) {
+        increment = 50;
+    } else {
+        increment = 100;
     }
-    breaks[0] = data[0];
-    roundedBreaks = breaks.map(b => Math.round(b / 5) * 5);
 
-    return roundedBreaks.slice(1);
-}
+    renderer.classBreakInfos.forEach((info, index) => {
+        info.minValue = Math.floor(info.minValue / increment) * increment;
+        info.maxValue = Math.ceil(info.maxValue / increment) * increment;
 
-// Function to generate arcgis renderer
-export function generateRenderer(breaks, colors, outline) {
-    return {
-        type: "class-breaks",
-        defaultSymbol: {
-            type: "simple-fill",
-            color: colors[0], // for no or null trips
-            outline: outline
-        },
-        defaultLabel: "0 trip",
-        classBreakInfos: [
-        {
-            minValue: 1,
-            maxValue: breaks[0],
-            symbol: {
-                type: "simple-fill",
-                color: colors[1],
-                outline: outline
-            },
-            label: `1-${breaks[0]} trips`
-        },
-        {
-            minValue: breaks[0]+1,
-            maxValue: breaks[1],
-            symbol: {
-                type: "simple-fill",
-                color: colors[2],
-                outline: outline
-            },
-            label: `${breaks[0]+1}-${breaks[1]} trips`
-        },
-        {
-            minValue: breaks[1]+1,
-            maxValue: breaks[2],
-            symbol: {
-                type: "simple-fill",
-                color: colors[3],
-                outline: outline
-            },
-            label: `${breaks[1]+1}-${breaks[2]} trips`
-        },
-        {
-            minValue: breaks[2]+1,
-            maxValue: breaks[3],
-            symbol: {
-                type: "simple-fill",
-                color: colors[4],
-                outline: outline
-            },
-            label: `${breaks[2]+1}-${breaks[3]} trips`
-        },
-        {
-            minValue: breaks[3]+1,
-            maxValue: 99999999999,
-            symbol: {
-                type: "simple-fill",
-                color: colors[5],
-                outline: outline
-            },
-            label: `>${breaks[3]} trips`
-        }
-    ]};
+        info.symbol.color = config.colors[index];
+        info.symbol.outline = zoneOutline;
+    });
+
+    return renderer;
+
 }

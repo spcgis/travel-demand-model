@@ -1,13 +1,14 @@
 // Load resources
-const [FeatureLayer, colorRendererCreator, reactiveUtils] = await $arcgis.import([
+const [FeatureLayer, reactiveUtils] = await $arcgis.import([
     "@arcgis/core/layers/FeatureLayer.js",
-    "@arcgis/core/smartMapping/renderers/color.js",
     "@arcgis/core/core/reactiveUtils.js"
-
 ]);
+
+import { applyRenderer, boundaryRenderer } from "./renderer.js";
 
 // Initialize map with neutral basemap
 const mapElement = document.querySelector("#map");
+await mapElement.componentOnReady();
 const view = mapElement.view;
 
 // Listener for CUBE selector
@@ -81,107 +82,6 @@ const joinedFeatures = layerResults.features.map(feature => {
 });
 
 // Configure zonal renderer
-const zoneOutline = { color: [0, 0, 0], width: 1 } // Black outline
-
-const boundaryRenderer = {
-    type: "simple",
-    symbol: {
-        type: "simple-fill",
-        color: [255, 255, 255, 0], // Transparent white 
-        outline: zoneOutline
-    }
-};
-
-const tripColors = [
-     [180, 230, 180, 0.7],
-     [255, 241, 169, 0.7],
-     [254, 204, 92, 0.7],
-     [253, 141, 60, 0.7],
-     [240, 59, 32, 0.7],
-     [189, 0, 38, 0.7]
-];
-
-const areaTypeRenderer = {
-  type: "unique-value",
-  field: "areaType",
-  uniqueValueInfos: [
-    {
-      value: 1,
-      label: "Urban Core / Dense Commercial",
-      symbol: {
-        type: "simple-fill",
-        color: [242, 76, 0, 0.7]
-      }
-    },
-    {
-      value: 2,
-      label: "Urban Commercial / Dense Residential",
-      symbol: {
-        type: "simple-fill",
-        color: [252, 122, 30, 0.7]
-      }
-    },
-    {
-      value: 3,
-      label: "Urban Residential / Suburban Commercial",
-      symbol: {
-        type: "simple-fill",
-        color: [249, 199, 132, 0.7]
-      }
-    },
-    {
-      value: 4,
-      label: "Suburban Residential",
-      symbol: {
-        type: "simple-fill",
-        color: [231, 231, 231, 0.7]
-      }
-    },
-    {
-      value: 5,
-      label: "Exurban",
-      symbol: {
-        type: "simple-fill",
-        color: [72, 86, 150, 0.7]
-      }
-    }
-  ]
-};
-
-
-const rendererConfig = {
-  "inbound": {
-    field: "inbound",
-    colors: tripColors
-  },
-
-  "intrazonal": {
-    field: "intrazonal",
-    colors: tripColors
-  },
-
-  "popden": {
-    field: "popden",
-    colors: [
-      [239, 243, 255, 0.7],
-      [189, 215, 231, 0.7],
-      [107, 174, 214, 0.7],
-      [49, 130, 189, 0.7],
-      [8, 81, 156, 0.7]
-    ]
-  },
-
-  "emden": {
-    field: "emden",
-    colors: [
-      [242, 240, 247, 0.7],
-      [203, 201, 226, 0.7],
-      [158, 154, 200, 0.7],
-      [117, 107, 177, 0.7],
-      [84, 39, 143, 0.7]
-    ]
-  }
-};
 
 // Create a client-side FeatureLayer
 const joinedLayer = new FeatureLayer({
@@ -194,34 +94,6 @@ const joinedLayer = new FeatureLayer({
     renderer: boundaryRenderer,
     visible: true
 });
-
-async function applyRenderer(type) {
-    if (type === "none") {
-        return boundaryRenderer;
-    }
-
-    if (type == "areaType") {
-        return areaTypeRenderer;
-    }
-
-    const config = rendererConfig[type];
-
-    const { renderer } =
-        await colorRendererCreator.createClassBreaksRenderer({
-          layer: joinedLayer,
-          field: config.field,
-          classificationMethod: "natural-breaks",
-          numClasses: 5
-        });
-    
-    renderer.classBreakInfos.forEach((info, index) => {
-        info.symbol.color = config.colors[index];
-        info.symbol.outline = zoneOutline;
-    });
-
-    return renderer;
-
-}
 mapElement.map.add(joinedLayer);
 
 // Hide map until layers are displayed
@@ -237,16 +109,16 @@ Promise.all(
   )
 ).then(() => {
   const legend = document.querySelector("arcgis-legend");
-  const classicView = legend.shadowRoot
-    .querySelector("arcgis-legend-classic-view");
-  const classicElement = classicView.shadowRoot
-    .querySelector("arcgis-legend-classic-element");
+  const classicView = legend.shadowRoot.querySelector("arcgis-legend-classic-view");
+  const classicElement = classicView.shadowRoot.querySelector("arcgis-legend-classic-element");
+
   const style = document.createElement("style");
   style.textContent = `
     .layer-caption {
       display: none !important;
     }
   `;
+
   classicElement.shadowRoot.appendChild(style);
   hideLoadingScreen();
 });
@@ -254,31 +126,7 @@ Promise.all(
 // Attach event listener to zoneSelect
 const zoneSelector = document.getElementById("zoneSelect");
 zoneSelector.addEventListener("change", async () => {
-    const renderer = await applyRenderer(zoneSelector.value);
+    const renderer = await applyRenderer(zoneSelector.value, joinedLayer);
     joinedLayer.title = zoneSelector.selectedOptions[0].text;
     joinedLayer.renderer = renderer;
 });
-
-//     // Function to cache query tables
-//     const queryTables = {};
-//     function getQueryTable(key) {
-//         if (!queryTables[key]) {
-//             queryTables[key] = new FeatureLayer({
-//                 url: baseURL + tableURL[key],
-//                 outFields: ["*"],
-//                 visible: false
-//             });
-//         }
-//         return queryTables[key];
-//     }
-
-//     // Layer for display
-//     const displayLayer = new FeatureLayer({
-//         url: baseURL + tableURL.layer,
-//         id: "mapLayer",
-//         outFields: ["*"],
-//         visible: true
-//     });
-//     map.add(displayLayer);
-
-

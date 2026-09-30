@@ -110,7 +110,7 @@ const cubeLink = new FeatureLayer ({
       // W -> E and S -> N
       where: "DIrection IN ('W -> E', 'S -> N')",
       labelExpressionInfo: {
-        expression: "$feature.UnBuild"
+        expression: "'→ ' + Text($feature.UnBuild, '#,###')"
       },
       labelPlacement: "above-along",
       symbol: {
@@ -128,7 +128,7 @@ const cubeLink = new FeatureLayer ({
       // Everything else
       where: "DIrection NOT IN ('W -> E', 'S -> N')",
       labelExpressionInfo: {
-        expression: "$feature.UnBuild"
+        expression: "Text($feature.UnBuild, '#,###') + ' ←'"
       },
       labelPlacement: "below-along",
       symbol: {
@@ -258,17 +258,6 @@ zoneSelector.addEventListener("change", async () => {
     const renderer = await applyRenderer(zoneStat, joinedLayer);
     joinedLayer.title = zoneSelector.selectedOptions[0].text;
     joinedLayer.renderer = renderer;
-    // const legend = document.querySelector("arcgis-legend");
-    // const classicView = legend.shadowRoot.querySelector("arcgis-legend-classic-view");
-    // const classicElement = classicView.shadowRoot.querySelector("arcgis-legend-classic-element");
-
-    // const style = document.createElement("style");
-    // style.textContent = `
-    //   .layer-caption {
-    //     display: none !important;
-    //   }
-    // `;
-    // classicElement.shadowRoot.appendChild(style);
   }
 });
 
@@ -288,14 +277,14 @@ cubeScenario.addEventListener("change", async () => {
   if (selectedVal.includes("diff")) {
     cubeLink.renderer = createDiffRenderer(selectedVal);
     cubeLink.where = `${selectedVal} IS NOT NULL`
-    cubeLink.labelingInfo[0].labelExpressionInfo.expression = `Text($feature.${selectedVal}, '#,##0.00%')` 
-    cubeLink.labelingInfo[1].labelExpressionInfo.expression = `Text($feature.${selectedVal}, '#,##0.00%')`
+    cubeLink.labelingInfo[0].labelExpressionInfo.expression = `'→ '+Text($feature.${selectedVal})+'%'` 
+    cubeLink.labelingInfo[1].labelExpressionInfo.expression = `Text($feature.${selectedVal})+'% ←'`
     cubeLink.renderer.valueExpressionTitle = "Percent Change"
     
   } else {
     cubeLink.renderer = cubeRenderer;
-    cubeLink.labelingInfo[0].labelExpressionInfo.expression = `Text($feature.${selectedVal}, '#,###')` 
-    cubeLink.labelingInfo[1].labelExpressionInfo.expression = `Text($feature.${selectedVal}, '#,###')`
+    cubeLink.labelingInfo[0].labelExpressionInfo.expression = `'→ '+Text($feature.${selectedVal}, '#,###')` 
+    cubeLink.labelingInfo[1].labelExpressionInfo.expression = `Text($feature.${selectedVal}, '#,###'+' ←')`
     cubeLink.renderer.valueExpressionTitle = "Functional Class"
   }
 });

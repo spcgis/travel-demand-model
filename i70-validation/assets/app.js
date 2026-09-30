@@ -139,8 +139,7 @@ const cubeLink = new FeatureLayer ({
         font: {
           size: 10
         }
-      },
-      deconflictionStrategy: "none"
+      }
     }
   ]
 });
@@ -175,8 +174,7 @@ const pennDotLink = new FeatureLayer({
       font: {
         size: 10
       }
-    },
-    deconflictionStrategy: "none"
+    }
   }]
 });
 mapElement.map.add(pennDotLink);
@@ -210,8 +208,7 @@ const streetlight = new FeatureLayer({
       font: {
         size: 10
       }
-    },
-    deconflictionStrategy: "none"
+    }
   }]
 });
 mapElement.map.add(streetlight);

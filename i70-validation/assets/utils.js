@@ -127,15 +127,17 @@ export async function applyRenderer(type, layer) {
     }
 
     const config = rendererConfig[type];
-
     const { renderer } =
         await colorRendererCreator.createClassBreaksRenderer({
           layer: layer,
           field: config.field,
           where: `${config.field} != 0`,
           classificationMethod: "natural-breaks",
-          numClasses: 5
-        });
+          numClasses: 5,
+          legendOptions: {
+          title:`${config.unit}`
+        }
+      });
     
     const breaks = renderer.classBreakInfos;
     const overallMax = renderer.classBreakInfos.at(-1).maxValue;

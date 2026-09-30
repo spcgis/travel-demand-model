@@ -258,17 +258,17 @@ zoneSelector.addEventListener("change", async () => {
     const renderer = await applyRenderer(zoneStat, joinedLayer);
     joinedLayer.title = zoneSelector.selectedOptions[0].text;
     joinedLayer.renderer = renderer;
-    const legend = document.querySelector("arcgis-legend");
-    const classicView = legend.shadowRoot.querySelector("arcgis-legend-classic-view");
-    const classicElement = classicView.shadowRoot.querySelector("arcgis-legend-classic-element");
+    // const legend = document.querySelector("arcgis-legend");
+    // const classicView = legend.shadowRoot.querySelector("arcgis-legend-classic-view");
+    // const classicElement = classicView.shadowRoot.querySelector("arcgis-legend-classic-element");
 
-    const style = document.createElement("style");
-    style.textContent = `
-      .layer-caption {
-        display: none !important;
-      }
-    `;
-    classicElement.shadowRoot.appendChild(style);
+    // const style = document.createElement("style");
+    // style.textContent = `
+    //   .layer-caption {
+    //     display: none !important;
+    //   }
+    // `;
+    // classicElement.shadowRoot.appendChild(style);
   }
 });
 
@@ -290,12 +290,13 @@ cubeScenario.addEventListener("change", async () => {
     cubeLink.where = `${selectedVal} IS NOT NULL`
     cubeLink.labelingInfo[0].labelExpressionInfo.expression = `Text($feature.${selectedVal}, '#,##0.00%')` 
     cubeLink.labelingInfo[1].labelExpressionInfo.expression = `Text($feature.${selectedVal}, '#,##0.00%')`
-    cubeLink.title = "Functional Class"
+    cubeLink.renderer.valueExpressionTitle = "Percent Change"
+    
   } else {
     cubeLink.renderer = cubeRenderer;
     cubeLink.labelingInfo[0].labelExpressionInfo.expression = `Text($feature.${selectedVal}, '#,###')` 
     cubeLink.labelingInfo[1].labelExpressionInfo.expression = `Text($feature.${selectedVal}, '#,###')`
-    cubeLink.title = "Percent Change"
+    cubeLink.renderer.valueExpressionTitle = "Functional Class"
   }
 });
 

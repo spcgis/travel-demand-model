@@ -1,22 +1,22 @@
 // Load resources
-const [FeatureLayer, reactiveUtils] = await $arcgis.import([
+const [FeatureLayer, reactiveUtils, Graphic, labelPointOperator] = await $arcgis.import([
     "@arcgis/core/layers/FeatureLayer.js",
-    "@arcgis/core/core/reactiveUtils.js"
+    "@arcgis/core/core/reactiveUtils.js",
+    "@arcgis/core/Graphic.js",
+    "@arcgis/core/geometry/operators/labelPointOperator.js"
 ]);
 
-import { applyRenderer, boundaryRenderer } from "./renderer.js";
+import { 
+  applyRenderer, 
+  boundaryRenderer,
+  cubeRenderer,
+  createDiffRenderer,
+  featureURLS } from "./utils.js";
 
 // Initialize map with neutral basemap
 const mapElement = document.querySelector("#map");
 await mapElement.componentOnReady();
 const view = mapElement.view;
-
-// Listener for CUBE selector
-const cubeSelector = document.getElementById("CUBE");
-cubeSelector.addEventListener("change", () => {
-    document.getElementById("cubeSelect").style.display = 
-        cubeSelector.checked ? "block" : "none";
-});
 
 // Functions to configure loading screen
 const loadingScreen = document.getElementById("loading-screen");
@@ -35,14 +35,14 @@ setLoadingStatus("Loading zonal data");
 
 // Get SPC TAZ and join with zonal data table
 const cubeTAZ = new FeatureLayer({
-    url: "https://services3.arcgis.com/MV5wh5WkCMqlwISp/ArcGIS/rest/services/FifthForbes_ThruTrips/FeatureServer/0",
+    url: featureURLS.ZoneLayer,
     id: "CUBE_Zones",
     outFields: ["CUBE_ZONE"],
     visible: false
 });
 
 const zonalData = new FeatureLayer({
-    url: "https://services3.arcgis.com/MV5wh5WkCMqlwISp/ArcGIS/rest/services/TDM_Validation/FeatureServer/3",
+    url: featureURLS.zoneData,
     id: "zonalData",
     outFields: ["*"],
     visible: false
@@ -96,11 +96,145 @@ const joinedLayer = new FeatureLayer({
 });
 mapElement.map.add(joinedLayer);
 
+setLoadingStatus("Loading networks...");
+
+const cubeLink = new FeatureLayer ({
+  url: featureURLS.cubeLink,
+  id: "cubelink",
+  title: "CUBE Link",
+  outFields: ["*"],
+  visible: false,
+  renderer: cubeRenderer,
+  labelingInfo: [
+    {
+      // W -> E and S -> N
+      where: "DIrection IN ('W -> E', 'S -> N')",
+      labelExpressionInfo: {
+        expression: "$feature.UnBuild"
+      },
+      labelPlacement: "above-along",
+      symbol: {
+        type: "text",
+        color: "black",
+        haloColor: "white",
+        haloSize: 1,
+        font: {
+          size: 10
+        }
+      },
+      deconflictionStrategy: "none"
+    },
+    {
+      // Everything else
+      where: "DIrection NOT IN ('W -> E', 'S -> N')",
+      labelExpressionInfo: {
+        expression: "$feature.UnBuild"
+      },
+      labelPlacement: "below-along",
+      symbol: {
+        type: "text",
+        color: "black",
+        haloColor: "white",
+        haloSize: 1,
+        font: {
+          size: 10
+        }
+      },
+      deconflictionStrategy: "none"
+    }
+  ]
+});
+mapElement.map.add(cubeLink);
+
+const cubeNode = new FeatureLayer ({
+  url: featureURLS.cubeNode,
+  popupEnabled: true,
+  id: "cubenode",
+  outFields: ["*"],
+  visible: false,
+  title: "CUBE Node"
+});
+mapElement.map.add(cubeNode);
+
+const pennDotLink = new FeatureLayer({
+  url: featureURLS.pennDot,
+  id: "pdlink",
+  title: "PennDOT RMS Segments",
+  outFields: ["*"],
+  visible: false,
+  labelingInfo: [{
+    labelExpressionInfo: {
+      expression: "Text($feature.CUR_AADT, '#,###')"
+    },
+    labelPlacement: "above-along",
+    symbol: {
+      type: "text",
+      color: "black",
+      haloColor: "white",
+      haloSize: 1,
+      font: {
+        size: 10
+      }
+    },
+    deconflictionStrategy: "none"
+  }]
+});
+mapElement.map.add(pennDotLink);
+
+const pennDot_node = new FeatureLayer ({
+  url: featureURLS.pennDot_node,
+  id: "pdnode",
+  outFields: ["*"],
+  visible: false,
+  title: "PennDOT Node"
+});
+mapElement.map.add(pennDot_node);
+
+const streetlight = new FeatureLayer({
+  url: featureURLS.streetlight,
+  popupEnabled: true,
+  id: "stlink",
+  title: "Streetlight",
+  outFields: ["*"],
+  visible: false,
+  labelingInfo: [{
+    labelExpressionInfo: {
+      expression: "Text($feature.Estimated, '#,###')"
+    },
+    labelPlacement: "above-along",
+    symbol: {
+      type: "text",
+      color: "black",
+      haloColor: "white",
+      haloSize: 1,
+      font: {
+        size: 10
+      }
+    },
+    deconflictionStrategy: "none"
+  }]
+});
+mapElement.map.add(streetlight);
+
+const streetlight_node = new FeatureLayer ({
+  url: featureURLS.streetlight_node,
+  id: "stnode",
+  outFields: ["*"],
+  visible: false,
+  title: "Streetlight Node"
+});
+mapElement.map.add(streetlight_node);
+
 // Hide map until layers are displayed
 const layers = [
-  joinedLayer
+  joinedLayer,
+  cubeLink,
+  cubeNode,
+  pennDot_node,
+  pennDotLink,
+  streetlight,
+  streetlight_node
 ];
-
 Promise.all(
   layers.map(layer =>
     view.whenLayerView(layer).then(layerView =>
@@ -108,25 +242,72 @@ Promise.all(
     )
   )
 ).then(() => {
-  const legend = document.querySelector("arcgis-legend");
-  const classicView = legend.shadowRoot.querySelector("arcgis-legend-classic-view");
-  const classicElement = classicView.shadowRoot.querySelector("arcgis-legend-classic-element");
-
-  const style = document.createElement("style");
-  style.textContent = `
-    .layer-caption {
-      display: none !important;
-    }
-  `;
-
-  classicElement.shadowRoot.appendChild(style);
   hideLoadingScreen();
 });
+
+// Add listeners to all interactive elements
 
 // Attach event listener to zoneSelect
 const zoneSelector = document.getElementById("zoneSelect");
 zoneSelector.addEventListener("change", async () => {
-    const renderer = await applyRenderer(zoneSelector.value, joinedLayer);
+  const zoneStat = zoneSelector.value;
+  if (zoneStat === "none") {
+    joinedLayer.visible = false;
+  } else {
+    joinedLayer.visible = true;
+    const renderer = await applyRenderer(zoneStat, joinedLayer);
     joinedLayer.title = zoneSelector.selectedOptions[0].text;
     joinedLayer.renderer = renderer;
+    const legend = document.querySelector("arcgis-legend");
+    const classicView = legend.shadowRoot.querySelector("arcgis-legend-classic-view");
+    const classicElement = classicView.shadowRoot.querySelector("arcgis-legend-classic-element");
+
+    const style = document.createElement("style");
+    style.textContent = `
+      .layer-caption {
+        display: none !important;
+      }
+    `;
+    classicElement.shadowRoot.appendChild(style);
+  }
+});
+
+// Listener for CUBE selector
+const cubeSelector = document.getElementById("CUBE");
+cubeSelector.addEventListener("change", () => {
+    document.getElementById("cubeSelect").style.display = 
+        cubeSelector.checked ? "block" : "none";
+    cubeLink.visible = cubeSelector.checked;
+    cubeNode.visible = cubeSelector.checked;
+});
+
+
+const cubeScenario = document.querySelector("#cubeSelect select");
+cubeScenario.addEventListener("change", async () => {
+  const selectedVal = cubeScenario.value;
+  if (selectedVal.includes("diff")) {
+    cubeLink.renderer = createDiffRenderer(selectedVal);
+    cubeLink.where = `${selectedVal} IS NOT NULL`
+    cubeLink.labelingInfo[0].labelExpressionInfo.expression = `Text($feature.${selectedVal}, '#,##0.00%')` 
+    cubeLink.labelingInfo[1].labelExpressionInfo.expression = `Text($feature.${selectedVal}, '#,##0.00%')`
+    cubeLink.title = "Functional Class"
+  } else {
+    cubeLink.renderer = cubeRenderer;
+    cubeLink.labelingInfo[0].labelExpressionInfo.expression = `Text($feature.${selectedVal}, '#,###')` 
+    cubeLink.labelingInfo[1].labelExpressionInfo.expression = `Text($feature.${selectedVal}, '#,###')`
+    cubeLink.title = "Percent Change"
+  }
+});
+
+// Listener for other networks
+const pennDOTSelector = document.getElementById("PennDOT");
+pennDOTSelector.addEventListener("change", () => {
+    pennDotLink.visible = pennDOTSelector.checked;
+    pennDot_node.visible = pennDOTSelector.checked;
+});
+
+const stlSelector = document.getElementById("Streetlight");
+stlSelector.addEventListener("change", () => {
+    streetlight.visible = stlSelector.checked;
+    streetlight_node.visible = stlSelector.checked;
 });

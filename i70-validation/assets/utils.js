@@ -48,14 +48,14 @@ const ttRenderer = {
       value: 3,
       symbol: {
         type: "simple-fill",
-        color: [102,187,106, 0.7]
+        color: [156,204,101, 0.7]
       }
     },
     {
       value: 5,
       symbol: {
         type: "simple-fill",
-        color: [156,204,101, 0.7]
+        color: [102,187,106, 0.7]
       }
     },
     {

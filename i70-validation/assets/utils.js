@@ -37,6 +37,45 @@ const tripColors = [
      [189, 0, 38, 0.7]
 ];
 
+const ttRenderer = {  
+  type: "unique-value",
+  field: "termTime",
+  legendOptions: {
+    title: "mins"
+  },
+  uniqueValueInfos: [
+    {
+      value: 3,
+      symbol: {
+        type: "simple-fill",
+        color: [102,187,106, 0.7]
+      }
+    },
+    {
+      value: 5,
+      symbol: {
+        type: "simple-fill",
+        color: [156,204,101, 0.7]
+      }
+    },
+    {
+      value: 8,
+      symbol: {
+        type: "simple-fill",
+        color: [255,193,7, 0.7]
+      }
+    },
+    {
+      value: 10,
+      symbol: {
+        type: "simple-fill",
+        color: [239,108,0, 0.7]
+      }
+    }
+  ]
+};
+
+
 const areaTypeRenderer = {
   type: "unique-value",
   field: "areaType",
@@ -124,6 +163,10 @@ export async function applyRenderer(type, layer) {
 
     if (type === "areaType") {
         return areaTypeRenderer;
+    }
+
+    if (type === "termTime") {
+      return ttRenderer;
     }
 
     const config = rendererConfig[type];
@@ -344,6 +387,10 @@ export const popupTemplate = {
           {
             fieldName: "outbound",
             label: "Outbound Trips"
+          },
+          {
+            fieldName: "termTime",
+            label: "Terminal Time"
           },
           {
             fieldName: "areaType",

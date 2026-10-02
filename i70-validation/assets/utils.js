@@ -2,13 +2,13 @@
 const baseURL = "https://services3.arcgis.com/MV5wh5WkCMqlwISp/arcgis/rest/services/TDM_Validation/FeatureServer/"
 export const featureURLS = {
   "ZoneLayer": "https://services3.arcgis.com/MV5wh5WkCMqlwISp/ArcGIS/rest/services/FifthForbes_ThruTrips/FeatureServer/0",
-  "cubeNode": baseURL + "2",
-  "cubeLink": baseURL + "5",
-  "zoneData": baseURL + "6",
-  "pennDot": baseURL + "4",
-  "pennDot_node": baseURL + "0",
-  "streetlight": baseURL + "3",
-  "streetlight_node": baseURL +"1"
+  "cubeLink": baseURL + "0",
+  "cubeNode": baseURL + "1",
+  "pennDot": baseURL + "2",
+  "pennDot_node": baseURL + "3",
+  "streetlight": baseURL + "4",
+  "streetlight_node": baseURL +"5",
+  "zoneData": baseURL + "6"
 }
 
 
@@ -89,7 +89,7 @@ const rendererConfig = {
   "intrazonal": {
     field: "intrazonal",
     colors: tripColors,
-    unit: "trip"
+    unit: "trips"
   },
 
   "popden": {
@@ -258,7 +258,7 @@ export function createDiffRenderer (field) {
         label: "< -50%",
         symbol: {
           type: "simple-line",
-          color: "#006d2c",
+          color: [27,94,32,0.7],
           width: 7
         }
       },
@@ -268,27 +268,37 @@ export function createDiffRenderer (field) {
         label: "-50% to -25%",
         symbol: {
           type: "simple-line",
-          color: "#31a354",
+          color:[102,187,106,0.7],
           width: 5
         }
       },
       {
         minValue: -25,
-        maxValue: 0,
-        label: "-25% to 0%",
+        maxValue: -10,
+        label: "-25% to -10%",
         symbol: {
           type: "simple-line",
-          color: "#74c476",
+          color: [156,204,101,0.7],
           width: 3
         }
       },
       {
-        minValue: 0,
-        maxValue: 25,
-        label: "0% to 25%",
+        minValue: -10,
+        maxValue: 10,
+        label: "-10% to 10%",
         symbol: {
           type: "simple-line",
-          color: "#fc9272",
+          color: [128,128,128,0.7],
+          width: 2
+        }
+      },
+      {
+        minValue: 10,
+        maxValue: 25,
+        label: "10% to 25%",
+        symbol: {
+          type: "simple-line",
+          color: [255,193,7,0.7],
           width: 3
         }
       },
@@ -298,7 +308,7 @@ export function createDiffRenderer (field) {
         label: "25% to 50%",
         symbol: {
           type: "simple-line",
-          color: "#fb6a4a",
+          color: [239,108,0,0.7],
           width: 5
         }
       },
@@ -308,10 +318,125 @@ export function createDiffRenderer (field) {
         label: "> 50%",
         symbol: {
           type: "simple-line",
-          color: "#cb181d",
+          color: [183,28,28,0.7],
           width: 7
         }
       }
     ]
   };
+}
+
+export const popupTemplate = {
+  zone: {
+    title: "Zone: {zone}",
+    content: [
+      {
+        type: "fields",
+        fieldInfos: [
+          {
+            fieldName: "intrazonal",
+            label: "Intrazonal Trips"
+          },
+          {
+            fieldName: "inbound",
+            label: "Inbound Trips"
+          },
+          {
+            fieldName: "outbound",
+            label: "Outbound Trips"
+          },
+          {
+            fieldName: "areaType",
+            label: "Area Type"
+          },
+          {
+            fieldName: "popden",
+            label: "Population Density"
+          },
+          {
+            fieldName: "emden",
+            label: "Employment Density"
+          }
+        ]
+      }
+    ]
+
+  },
+  link: {
+    title: "Link {A}-{B}",
+    content: [
+      {
+        type: "fields",
+        fieldInfos: [
+          {
+            fieldName: "A",
+            type: "long"
+          },
+          {
+            fieldName: "B",
+            type: "long"
+          },
+          {
+            fieldName: "DISTANCE",
+            type: "long"
+          },
+          {
+            fieldName: "CAPCLASS",
+            type: "long"
+          },
+          {
+            fieldName: "SPDCLASS",
+            type: "long"
+          },
+          {
+            fieldName: "LANES",
+            type: "long"
+          },
+          {
+            fieldName: "FUNC",
+            type: "short"
+          },
+          {
+            fieldName: "CO",
+            type: "short"
+          },
+          {
+            fieldName: "HOV",
+            type: "short"
+          },
+          {
+            fieldName: "DIrection",
+            label: "Direction"
+          },
+          {
+            fieldName: "UnBuild",
+            label: "Unbuild"
+          },
+          {
+            fieldName: "speedChange",
+            label: "Speed Change"
+          }
+        ]
+      }
+    ]
+  },
+  node: {
+    title: "Node {N}"
+  },
+  streetlight: {
+    title: "Streetlight 2071238",
+    content: [
+      {
+        type: "fields",
+        fieldInfos: [{
+          fieldName: "name",
+          label: "Street Name"
+        },
+        {
+          fieldName: "Estimated",
+          label: "2025 ADT"
+        }]
+      }
+    ]
+  }
 }

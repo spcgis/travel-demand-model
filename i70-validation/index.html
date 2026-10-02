@@ -41,7 +41,7 @@
             </div>
         </div>
         <!-- Lower block: the Map -->
-        <arcgis-map id="map" basemap="gray-vector" center="-80.240288,40.169712" zoom="12" popup-component-enabled>
+        <arcgis-map id="map" basemap="gray-vector" center="-80.240288,40.169712" zoom="12" popup-component-enabled="true">
             <!--The filter-->
             <div slot="top-right" id="filterContainer">
                 <div style="margin-bottom: 10px;" id="networkSelect">
@@ -69,6 +69,8 @@
                     </select>
                 </div>
             </div> 
+            <!--Enable the popup-->
+            <arcgis-popup slot="popup" default-popup-template-enabled="false"></arcgis-popup>
             <!--The legend-->
             <arcgis-expand slot="bottom-left" expanded>
                 <arcgis-legend></arcgis-legend>

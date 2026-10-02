@@ -1,9 +1,7 @@
 // Load resources
-const [FeatureLayer, reactiveUtils, Graphic, labelPointOperator] = await $arcgis.import([
+const [FeatureLayer, reactiveUtils] = await $arcgis.import([
     "@arcgis/core/layers/FeatureLayer.js",
-    "@arcgis/core/core/reactiveUtils.js",
-    "@arcgis/core/Graphic.js",
-    "@arcgis/core/geometry/operators/labelPointOperator.js"
+    "@arcgis/core/core/reactiveUtils.js"
 ]);
 
 import { 
@@ -11,7 +9,8 @@ import {
   boundaryRenderer,
   cubeRenderer,
   createDiffRenderer,
-  featureURLS } from "./utils.js";
+  featureURLS,
+  popupTemplate } from "./utils.js";
 
 // Initialize map with neutral basemap
 const mapElement = document.querySelector("#map");
@@ -92,7 +91,9 @@ const joinedLayer = new FeatureLayer({
     spatialReference: cubeTAZ.spatialReference,
     title: "TAZ Boundary",
     renderer: boundaryRenderer,
-    visible: true
+    visible: true,
+    popupEnabled: true,
+    popupTemplate: popupTemplate.zone
 });
 mapElement.map.add(joinedLayer);
 
@@ -105,6 +106,8 @@ const cubeLink = new FeatureLayer ({
   outFields: ["*"],
   visible: false,
   renderer: cubeRenderer,
+  popupEnabled: true,
+  popupTemplate: popupTemplate.link,
   labelingInfo: [
     {
       // W -> E and S -> N
@@ -151,7 +154,9 @@ const cubeNode = new FeatureLayer ({
   id: "cubenode",
   outFields: ["*"],
   visible: false,
-  title: "CUBE Node"
+  title: "CUBE Node",
+  popupEnabled: true,
+  popupTemplate: popupTemplate.node
 });
 mapElement.map.add(cubeNode);
 
@@ -161,6 +166,7 @@ const pennDotLink = new FeatureLayer({
   title: "PennDOT RMS Segments",
   outFields: ["*"],
   visible: false,
+  popupEnabled: true,
   labelingInfo: [{
     labelExpressionInfo: {
       expression: "Text($feature.CUR_AADT, '#,###')"
@@ -191,6 +197,7 @@ mapElement.map.add(pennDot_node);
 const streetlight = new FeatureLayer({
   url: featureURLS.streetlight,
   popupEnabled: true,
+  popupTemplate: popupTemplate.streetlight,
   id: "stlink",
   title: "Streetlight",
   outFields: ["*"],

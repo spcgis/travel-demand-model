@@ -452,6 +452,10 @@ export const popupTemplate = {
             type: "short"
           },
           {
+            fieldName: "TOLL",
+            type: "short"
+          },
+          {
             fieldName: "DIrection",
             label: "Direction"
           },

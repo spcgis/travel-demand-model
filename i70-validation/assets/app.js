@@ -125,7 +125,6 @@ const cubeLink = new FeatureLayer ({
           size: 10
         }
       },
-      deconflictionStrategy: "none"
     },
     {
       // Everything else

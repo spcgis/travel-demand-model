@@ -466,6 +466,14 @@ export const popupTemplate = {
           {
             fieldName: "speedChange",
             label: "Speed Change"
+          },
+          {
+            fieldName: "capChange",
+            label: "Capacity Change"
+          },
+          {
+            fieldName: "maxDist",
+            label: "Max Distance"
           }
         ]
       }

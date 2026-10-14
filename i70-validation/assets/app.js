@@ -125,6 +125,9 @@ const cubeLink = new FeatureLayer ({
           size: 10
         }
       },
+      repeatLabel: false,
+      deconflictionStrategy: "none",
+      minScale: 20000
     },
     {
       // Everything else
@@ -141,7 +144,10 @@ const cubeLink = new FeatureLayer ({
         font: {
           size: 10
         }
-      }
+      },
+      repeatLabel: false,
+      deconflictionStrategy:"none",
+      minScale: 20000
     }
   ]
 });

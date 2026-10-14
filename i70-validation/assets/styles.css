@@ -115,12 +115,31 @@ body, html {
 .main-header{
     width: 85%; 
     color: white;
-}
-.main-header > p {
-    margin-left: 15px;
+    font-family:Helvetica;
 }
 .main-header > h2 {
-    margin-left: 15px;
+    margin: 17px 0px 10px 15px;
+    font-size:1.30rem;
+}
+
+.header-definitions {
+    display: grid;
+    grid-template-columns: 1fr 1.4fr;
+    gap: 16px;
+    font-size: 15px;
+    line-height: 1.4;
+}
+
+.definition-column p {
+    margin: 0 0 6px 15px;
+}
+
+/* Stack columns on narrow screens */
+@media (max-width: 600px) {
+    .header-definitions {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
 }
 
 .logos{

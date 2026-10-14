@@ -274,24 +274,60 @@ cubeSelector.addEventListener("change", () => {
     cubeNode.visible = cubeSelector.checked;
 });
 
-
 const cubeScenario = document.querySelector("#cubeSelect select");
-cubeScenario.addEventListener("change", async () => {
-  const selectedVal = cubeScenario.value;
-  if (selectedVal.includes("diff")) {
+
+async function updateCubeDisplay() {
+  const scenario = cubeScenario.value;
+  const suffix = document.querySelector(
+    'input[name="cubeDisplay"]:checked'
+  ).value;
+  const selectedVal = scenario + suffix;
+
+  if (suffix==="_diff") {
+    // Difference display
     cubeLink.renderer = createDiffRenderer(selectedVal);
-    cubeLink.where = `${selectedVal} IS NOT NULL`
-    cubeLink.labelingInfo[0].labelExpressionInfo.expression = `'→ '+Text($feature.${selectedVal})+'%'` 
-    cubeLink.labelingInfo[1].labelExpressionInfo.expression = `Text($feature.${selectedVal})+'% ←'`
-    cubeLink.renderer.valueExpressionTitle = "Percent Change"
-    
+    cubeLink.where = `${selectedVal} IS NOT NULL`;
+    cubeLink.labelingInfo[0].labelExpressionInfo.expression = `'→ '+Text($feature.${selectedVal})+'%'`; 
+    cubeLink.labelingInfo[1].labelExpressionInfo.expression = `Text($feature.${selectedVal})+'% ←'`;
+    cubeLink.renderer.valueExpressionTitle = "Percent Change";
   } else {
+    // Network display
     cubeLink.renderer = cubeRenderer;
-    cubeLink.labelingInfo[0].labelExpressionInfo.expression = `'→ '+Text($feature.${selectedVal}, '#,###')` 
-    cubeLink.labelingInfo[1].labelExpressionInfo.expression = `Text($feature.${selectedVal}, '#,###'+' ←')`
-    cubeLink.renderer.valueExpressionTitle = "Functional Class"
+    cubeLink.labelingInfo[0].labelExpressionInfo.expression = `'→ '+Text($feature.${selectedVal}, '#,###')`;
+    cubeLink.labelingInfo[1].labelExpressionInfo.expression = `Text($feature.${selectedVal}, '#,###'+' ←')`;
+    cubeLink.renderer.valueExpressionTitle = "Functional Class";
+
   }
+}
+
+cubeScenario.addEventListener("change", updateCubeDisplay);
+
+const cubeDisplayRadios = document.querySelectorAll(
+  'input[name="cubeDisplay"]'
+);
+cubeDisplayRadios.forEach(radio => {
+    radio.addEventListener("change", updateCubeDisplay);
 });
+
+
+
+// const cubeScenario = document.querySelector("#cubeSelect select");
+// cubeScenario.addEventListener("change", async () => {
+//   const selectedVal = cubeScenario.value;
+//   if (selectedVal.includes("diff")) {
+//     cubeLink.renderer = createDiffRenderer(selectedVal);
+//     cubeLink.where = `${selectedVal} IS NOT NULL`
+//     cubeLink.labelingInfo[0].labelExpressionInfo.expression = `'→ '+Text($feature.${selectedVal})+'%'` 
+//     cubeLink.labelingInfo[1].labelExpressionInfo.expression = `Text($feature.${selectedVal})+'% ←'`
+//     cubeLink.renderer.valueExpressionTitle = "Percent Change"
+    
+//   } else {
+//     cubeLink.renderer = cubeRenderer;
+//     cubeLink.labelingInfo[0].labelExpressionInfo.expression = `'→ '+Text($feature.${selectedVal}, '#,###')` 
+//     cubeLink.labelingInfo[1].labelExpressionInfo.expression = `Text($feature.${selectedVal}, '#,###'+' ←')`
+//     cubeLink.renderer.valueExpressionTitle = "Functional Class"
+//   }
+// });
 
 // Listener for other networks
 const pennDOTSelector = document.getElementById("PennDOT");

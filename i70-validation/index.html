@@ -28,12 +28,28 @@
             <button id="toggleHeader" class="toggle-arrow">▲</button>
             <!-- Left block: Header content -->
             <div class = "main-header">
-                <h2 style="font-family:Helvetica; margin-bottom:0px;">SPC Model Validation | Current Focus: I-70 & I-79</h2>
-                <p style="font-family:Helvetica; font-size:medium;">
-                    <b>Unbuild</b> - DC25 loaded network, no change<br>
-                    <b>Speed Change</b> - Increasing freeflow speed definitions for freeways<br>
-                    <b>Speed Change (Difference)</b> - Difference in volume between Speed Change and Unbuild scenarios<br>
-                </p>
+                <h2>
+                    SPC Model Validation | Current Focus: I-70 & I-79
+                </h2>
+                <div class="header-definitions">
+                    <div class="definition-column">
+                        <p>
+                            <em>Scenarios:</em><br>
+                            <b>Unbuild</b> - DC25 loaded network, no change<br>
+                            <b>Speed Change</b> - Increasing freeway speed definitions<br>
+                            <b>Capacity Change</b> - Increasing freeway link capacity definitions<br>
+                            <b>Max Distance</b> - Capping centroid connector distances at 0.5 mile
+                        </p>
+                    </div>
+
+                    <div class="definition-column">
+                        <p>
+                            <em>Display options:</em><br>
+                            <b>Network</b> - Display the selected scenario ADT<br>
+                            <b>Difference</b> - Display the difference in ADT between the selected scenario and the unbuild scenario
+                        </p>
+                    </div>
+                </div>
             </div>
             <!-- Right block: Logos -->
             <div class = "logos">
@@ -48,11 +64,23 @@
                     <label>Display Network:</label></br>
                     <label><input type="checkbox" id="CUBE">CUBE</label></br>
                     <div id="cubeSelect" style="display: none;">
-                        <select>
+                        <label for="cubeScenario">Scenario:</label>
+                        <select id="cubeScenario">
                             <option value="UnBuild">Unbuild</option>
                             <option value="speedChange">Speed Change</option>
-                            <option value="speedChange_diff">Speed Change (Difference)</option>
+                            <option value="capChange">Capacity Change</option>
+                            <option value="maxDist">Max Distance</option>
                         </select>
+                        <br>
+                        <label>Display:</label><br>
+                        <label>
+                            <input type="radio" name="cubeDisplay" value="" checked>
+                            Network
+                        </label><br>
+                        <label>
+                            <input type="radio" name="cubeDisplay" value="_diff">
+                            Difference
+                        </label>
                     </div>
                     <label><input type="checkbox" id="PennDOT">PennDOT</label></br>
                     <label><input type="checkbox" id="Streetlight">Streetlight</label>
